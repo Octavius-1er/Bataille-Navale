@@ -59,8 +59,13 @@ export default function LearnGamesPage() {
   const [cols,    setCols]    = useState(['', '', '', '', '', ''])
   const [cells,   setCells]   = useState([])
   const [step,    setStep]    = useState(1) // 1=info, 2=structure, 3=cells
-  const [aiModal,  setAiModal]  = useState(false) // show AI template modal
-  const [aiPasted, setAiPasted] = useState('')     // pasted JSON from AI
+  const [aiModal,     setAiModal]     = useState(false)
+  const [aiPasted,    setAiPasted]    = useState('')
+  const [aiImageMode, setAiImageMode] = useState(false) // toggle image vs text mode
+  const [aiImage,     setAiImage]     = useState(null)  // base64 image
+  const [aiImagePreview, setAiImagePreview] = useState(null)
+  const [aiLoading,   setAiLoading]   = useState(false)
+  const [aiError,     setAiError]     = useState('')
 
   useEffect(() => { loadGames() }, [user])
 
@@ -137,6 +142,73 @@ export default function LearnGamesPage() {
       )
     }
     return JSON.stringify(template, null, 2)
+  }
+
+  async function analyzeImage() {
+    if (!aiImage) { toast('Choisissez une image','error'); return }
+    setAiLoading(true)
+    setAiError('')
+    try {
+      const prompt = `Tu es un assistant qui analyse des tableaux de jeu éducatif.
+Regarde cette image d'un tableau (Excel, Numbers ou papier).
+Extrait le contenu et génère un JSON avec ce format EXACT, sans aucun texte avant ou après :
+{
+  "name": "Nom du jeu détecté ou déduit",
+  "subject": "Matière détectée (Anglais/Français/Maths/etc)",
+  "rows": ["ligne1", "ligne2", ...],
+  "cols": ["col1", "col2", ...],
+  "forms": ["positive"],
+  "cells": [
+    [{"prompt":"contenu case","positive":"réponse","negative":"","interrogative":""},...]
+  ]
+}
+Règles :
+- rows = étiquettes des lignes (ex: pronoms I/You/He...)
+- cols = étiquettes des colonnes (ex: verbes Eat/Have...)
+- cells[r][c] correspond à row[r] + col[c]
+- prompt = ce que l'élève voit
+- positive/negative/interrogative = réponses (laisser vide si pas applicable)
+Réponds UNIQUEMENT avec le JSON, rien d'autre.`
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type:'image', source:{ type:'base64', media_type:'image/jpeg', data: aiImage } },
+              { type:'text', text: prompt }
+            ]
+          }]
+        })
+      })
+      const data = await response.json()
+      const text = data.content?.find(b => b.type==='text')?.text || ''
+      // Clean JSON
+      const clean = text.replace(/```json|```/g,'').trim()
+      setAiPasted(clean)
+      toast('Image analysée ! Vérifiez et importez.','success')
+    } catch(e) {
+      setAiError('Erreur lors de l'analyse : ' + e.message)
+      toast('Erreur analyse','error')
+    }
+    setAiLoading(false)
+  }
+
+  function handleImageUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const result = ev.target.result
+      setAiImagePreview(result)
+      // Extract base64 data only
+      setAiImage(result.split(',')[1])
+    }
+    reader.readAsDataURL(file)
   }
 
   function importFromAI() {
@@ -504,31 +576,81 @@ export default function LearnGamesPage() {
           <div className="card glow fade-up" style={{width:'100%',maxWidth:700,padding:36,position:'relative',marginTop:40}}>
             <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#aa44ff,transparent)'}}/>
             <button onClick={()=>setAiModal(false)} style={{position:'absolute',top:14,right:18,background:'none',border:'none',color:'#4a7090',fontSize:18,cursor:'pointer'}}>✕</button>
-            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:3,color:'#aa44ff',marginBottom:4}}>🤖 REMPLIR AVEC UNE IA</div>
-            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:20,lineHeight:1.6}}>
-              1. Copiez le template ci-dessous<br/>
-              2. Donnez-le à Claude / ChatGPT :<br/>
-              <span style={{color:'#c8e6f0',fontStyle:'italic'}}>Remplis ce template JSON. Remplace chaque [Défi...] par le vrai contenu.</span><br/>
-              3. Collez la réponse ci-dessous
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:3,color:'#aa44ff',marginBottom:16}}>🤖 REMPLIR AVEC UNE IA</div>
+
+            {/* Mode tabs */}
+            <div style={{display:'flex',gap:8,marginBottom:20}}>
+              {[
+                [false,'📋 TEMPLATE TEXTE','Copie un template à donner à une IA'],
+                [true, '📸 IMAGE EXCEL','Envoie une photo de ton tableau'],
+              ].map(([isImg,label,desc])=>(
+                <div key={label} onClick={()=>setAiImageMode(isImg)}
+                  style={{flex:1,padding:'10px 14px',border:`2px solid ${aiImageMode===isImg?'#aa44ff':'#1a3a5c'}`,background:aiImageMode===isImg?'rgba(170,68,255,.12)':'transparent',cursor:'pointer',textAlign:'center'}}>
+                  <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:14,letterSpacing:2,color:aiImageMode===isImg?'#aa44ff':'#4a7090'}}>{label}</div>
+                  <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090',marginTop:3}}>{desc}</div>
+                </div>
+              ))}
             </div>
-            <div style={{marginBottom:16}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#aa44ff',letterSpacing:1}}>TEMPLATE À COPIER</div>
-                <button onClick={()=>{navigator.clipboard.writeText(generateTemplate());toast('Copié !','success')}}
-                  style={{padding:'4px 12px',background:'rgba(170,68,255,.15)',border:'1px solid #aa44ff',color:'#aa44ff',fontFamily:'Share Tech Mono,monospace',fontSize:10,cursor:'pointer'}}>
-                  📋 COPIER
-                </button>
+
+            {/* TEXT MODE */}
+            {!aiImageMode && (<>
+              <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:12,lineHeight:1.7}}>
+                1. Copiez le template → 2. Donnez à Claude/ChatGPT avec votre sujet → 3. Collez la réponse
               </div>
-              <pre style={{background:'#030810',border:'1px solid #1a3a5c',padding:12,fontSize:10,fontFamily:'Share Tech Mono,monospace',color:'#4a7090',overflowX:'auto',maxHeight:200,overflowY:'auto',lineHeight:1.5}}>
-                {generateTemplate()}
-              </pre>
-            </div>
-            <div style={{marginBottom:16}}>
-              <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#00d4ff',letterSpacing:1,marginBottom:6}}>COLLEZ LA RÉPONSE ICI</div>
+              <div style={{marginBottom:14}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+                  <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#aa44ff',letterSpacing:1}}>TEMPLATE</div>
+                  <button onClick={()=>{navigator.clipboard.writeText(generateTemplate());toast('Copié !','success')}}
+                    style={{padding:'4px 12px',background:'rgba(170,68,255,.15)',border:'1px solid #aa44ff',color:'#aa44ff',fontFamily:'Share Tech Mono,monospace',fontSize:10,cursor:'pointer'}}>
+                    📋 COPIER
+                  </button>
+                </div>
+                <pre style={{background:'#030810',border:'1px solid #1a3a5c',padding:10,fontSize:9,fontFamily:'Share Tech Mono,monospace',color:'#4a7090',overflowX:'auto',maxHeight:160,overflowY:'auto',lineHeight:1.5}}>
+                  {generateTemplate()}
+                </pre>
+              </div>
+            </>)}
+
+            {/* IMAGE MODE */}
+            {aiImageMode && (<>
+              <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:12,lineHeight:1.7}}>
+                Fais une capture de ton tableau Excel/Numbers → l'IA lit l'image et remplit automatiquement le jeu.
+              </div>
+
+              {/* Upload zone */}
+              <label style={{display:'block',marginBottom:14,cursor:'pointer'}}>
+                <div style={{border:`2px dashed ${aiImagePreview?'#aa44ff':'#1a3a5c'}`,background:aiImagePreview?'rgba(170,68,255,.05)':'#030810',padding:aiImagePreview?8:24,textAlign:'center',transition:'all .2s'}}>
+                  {aiImagePreview
+                    ? <img src={aiImagePreview} style={{maxWidth:'100%',maxHeight:200,objectFit:'contain'}} alt="preview"/>
+                    : <>
+                        <div style={{fontSize:32,marginBottom:8}}>📸</div>
+                        <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:16,letterSpacing:2,color:'#aa44ff'}}>CLIQUEZ POUR IMPORTER</div>
+                        <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginTop:4}}>PNG, JPG, JPEG</div>
+                      </>
+                  }
+                </div>
+                <input type="file" accept="image/*" onChange={handleImageUpload} style={{display:'none'}}/>
+              </label>
+
+              {aiImagePreview && (
+                <button className="btn primary full" onClick={analyzeImage} disabled={aiLoading}
+                  style={{borderColor:'#aa44ff',color:'#aa44ff',marginBottom:14}}>
+                  {aiLoading ? '⏳ ANALYSE EN COURS...' : '🔍 ANALYSER L'IMAGE AVEC L'IA'}
+                </button>
+              )}
+
+              {aiError && <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ff3a3a',marginBottom:12,padding:'8px 12px',border:'1px solid rgba(255,58,58,.3)'}}>{aiError}</div>}
+            </>)}
+
+            {/* JSON result / paste area — shown in both modes */}
+            <div style={{marginBottom:14}}>
+              <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#00d4ff',letterSpacing:1,marginBottom:6}}>
+                {aiImageMode ? 'RÉSULTAT GÉNÉRÉ (modifiable)' : 'COLLEZ LA RÉPONSE ICI'}
+              </div>
               <textarea value={aiPasted} onChange={e=>setAiPasted(e.target.value)}
                 placeholder='{"name":"...","rows":[...],"cols":[...],"cells":[[...]]}'
-                rows={8}
-                style={{width:'100%',background:'#030810',border:'1px solid #1a3a5c',color:'#c8e6f0',padding:'10px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:11,outline:'none',resize:'vertical',lineHeight:1.5}}/>
+                rows={6}
+                style={{width:'100%',background:'#030810',border:'1px solid #1a3a5c',color:'#c8e6f0',padding:'10px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:10,outline:'none',resize:'vertical',lineHeight:1.5}}/>
             </div>
             <button className="btn primary full" onClick={importFromAI} disabled={!aiPasted.trim()}
               style={{borderColor:'#aa44ff',color:'#aa44ff'}}>
