@@ -494,10 +494,14 @@ Réponds UNIQUEMENT avec le JSON, rien d'autre.`
           <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:4,letterSpacing:1 }}>
             REMPLISSEZ CHAQUE CASE — "Défi" = ce que voit l'élève · Les réponses = ce que le prof voit après validation.
           </div>
-          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
             {forms.includes('positive')      && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#00ff88',border:'1px solid rgba(0,255,136,.3)',padding:'2px 8px' }}>➕ Positif activé</span>}
             {forms.includes('negative')      && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ff6666',border:'1px solid rgba(255,102,102,.3)',padding:'2px 8px' }}>➖ Négatif activé</span>}
             {forms.includes('interrogative') && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ffd700',border:'1px solid rgba(255,215,0,.3)',padding:'2px 8px' }}>❓ Interrogatif activé</span>}
+            <button className="btn sm" onClick={() => setAiModal(true)}
+              style={{ marginLeft:'auto', borderColor:'#aa44ff', color:'#aa44ff', background:'rgba(170,68,255,.08)' }}>
+              🤖 REMPLIR AVEC UNE IA
+            </button>
           </div>
 
           <div style={{ overflowX:'auto', marginBottom:20 }}>
