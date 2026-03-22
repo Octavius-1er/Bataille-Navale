@@ -5,6 +5,7 @@ import { collection, query, where, orderBy, limit, getDocs, addDoc, deleteDoc, d
 import { db } from '../lib/firebase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import { AdBanner } from '../components/AdSense'
 
 export default function DashboardPage() {
   const { user, profile, refreshProfile } = useAuth()
@@ -308,6 +309,8 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+      {/* Ad banner */}
+      <AdBanner style={{marginTop:32,marginBottom:16}}/>
     </div>
   )
 }
