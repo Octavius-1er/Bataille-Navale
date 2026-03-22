@@ -243,7 +243,7 @@ export default function AdminPage() {
     if (!massGiftCoins && !massGiftPack && !massGiftMsg.trim()) {
       toast('Ajoutez une récompense', 'error'); return
     }
-    if (!users?.length) { toast('Chargez les utilisateurs d'abord', 'error'); return }
+    if (!users?.length) { toast("Chargez les utilisateurs d'abord", 'error'); return }
     setMassSending(true)
 
     // Select targets
