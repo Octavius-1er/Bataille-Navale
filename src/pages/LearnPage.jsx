@@ -548,7 +548,10 @@ export default function LearnPage() {
   if (screen===S.CHALLENGE && challenge) {
     const { row, col, prompt, form, answer, formLabel } = challenge
     const tname = currentTeam===1?team1:team2
-    const formColor = form==='positive'?'#00ff88':form==='negative'?'#ff6666':form?'#ffd700':'#00d4ff'
+    const isLatin = game.subject === 'Latin'
+    const formColor = isLatin
+      ? (form==='positive'?'#00d4ff':form==='negative'?'#aa44ff':'#ffd700')
+      : (form==='positive'?'#00ff88':form==='negative'?'#ff6666':form?'#ffd700':'#00d4ff')
 
     return (
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'calc(100vh - 60px)',position:'relative',zIndex:1,padding:20}}>
@@ -561,11 +564,15 @@ export default function LearnPage() {
             {/* Form label — only for games with forms */}
             {formLabel && (
               <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:formColor,marginBottom:4}}>
-                {form==='positive'?'➕ POSITIVE FORM':form==='negative'?'➖ NEGATIVE FORM':'❓ QUESTION FORM'}
+                {isLatin
+                  ? (form==='positive'?'🔵 SINGULIER':form==='negative'?'🟣 PLURIEL':'❓ FORME INTERROGATIVE')
+                  : (form==='positive'?'➕ FORME AFFIRMATIVE':form==='negative'?'➖ FORME NÉGATIVE':'❓ FORME INTERROGATIVE')}
               </div>
             )}
             <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:13,color:'#4a7090',marginBottom:30,letterSpacing:2}}>
-              {formLabel ? 'SAY IT IN THE PAST TENSE' : 'DIS LA PHRASE À VOIX HAUTE'}
+              {isLatin
+                ? (formLabel ? 'DIS LA FORME DEMANDÉE' : 'DIS LA PHRASE À VOIX HAUTE')
+                : (formLabel ? 'DIS LA PHRASE AU PASSÉ' : 'DIS LA PHRASE À VOIX HAUTE')}
             </div>
 
             {/* Row + Col + Cell */}
@@ -580,7 +587,7 @@ export default function LearnPage() {
             {/* Teacher answer — revealed only after validation */}
             {challengeRevealed && answer && (
               <div style={{background:challengeRevealed==='correct'?'rgba(0,255,136,.08)':'rgba(255,58,58,.08)',border:`1px solid ${challengeRevealed==='correct'?'rgba(0,255,136,.3)':'rgba(255,58,58,.3)'}`,padding:'14px 20px',marginBottom:24,animation:'fadeUp .25s ease'}}>
-                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',letterSpacing:2,marginBottom:6}}>CORRECT ANSWER</div>
+                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',letterSpacing:2,marginBottom:6}}>BONNE RÉPONSE</div>
                 <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:2,color:challengeRevealed==='correct'?'#00ff88':'#ff6666'}}>{answer}</div>
               </div>
             )}
