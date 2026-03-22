@@ -193,7 +193,7 @@ Réponds UNIQUEMENT avec le JSON, rien d'autre.`
       toast('Image analysée ! Vérifiez et importez.','success')
     } catch(e) {
       setAiError('Erreur lors de l'analyse : ' + e.message)
-      toast('Erreur analyse','error')
+      toast("Erreur analyse",'error')
     }
     setAiLoading(false)
   }
