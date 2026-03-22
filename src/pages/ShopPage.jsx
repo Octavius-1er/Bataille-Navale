@@ -4,6 +4,7 @@ import { doc, getDoc, updateDoc, arrayUnion, increment, serverTimestamp } from '
 import { db } from '../lib/firebase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import { RewardedAdButton, AdBanner } from '../components/AdSense'
 import { PACKS, ALL_ITEMS, SEA_THEMES, SHIP_SKINS, RARITY, openPack, COIN_REWARDS, getItemIcon } from '../lib/shopData'
 
 const TAB = { PACKS:'packs', ITEMS:'items' }
@@ -356,10 +357,18 @@ export default function ShopPage() {
         <button style={tabBtn(TAB.ITEMS,'ITEMS')} onClick={()=>setTab(TAB.ITEMS)}>🎨 TOUS LES OBJETS</button>
       </div>
 
-      {/* Earn coins hint */}
-      <div style={{marginBottom:24,padding:'10px 16px',background:'rgba(255,215,0,.04)',border:'1px solid rgba(255,215,0,.15)',fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>
-        💡 Gagnez des 🪙 en jouant — Victoire: +{COIN_REWARDS.win} · Défaite: +{COIN_REWARDS.loss}
+      {/* Earn coins */}
+      <div style={{marginBottom:16,padding:'12px 16px',background:'rgba(255,215,0,.04)',border:'1px solid rgba(255,215,0,.15)',fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>
+        💡 Victoire: +{COIN_REWARDS.win}🪙 · Défaite: +{COIN_REWARDS.loss}🪙 · Pub: +30🪙
       </div>
+
+      {/* Rewarded Ad */}
+      <div style={{marginBottom:24,maxWidth:500}}>
+        <RewardedAdButton onRewarded={amt => setCoins(c => c + amt)}/>
+      </div>
+
+      {/* Ad banner */}
+      <AdBanner style={{marginBottom:24}}/>
 
       {/* ── PACKS TAB ──────────────────────────────────────────────── */}
       {tab===TAB.PACKS && (
