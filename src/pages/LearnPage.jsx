@@ -162,7 +162,7 @@ function LearnGrid({ board, game, shipMap = {}, onCellClick, onCellHover, onCell
 }
 
 // ── Screens ───────────────────────────────────────────────────────
-const S = { MODE:'mode', AI_DIFF:'ai-diff', SETUP:'setup', PLACEMENT:'placement', CHALLENGE:'challenge', RESULT:'result', BATTLE:'battle', WIN:'win' }
+const S = { MODE:'mode', AI_DIFF:'ai-diff', SETUP:'setup', OVA_SETUP:'ova-setup', PLACEMENT:'placement', CHALLENGE:'challenge', RESULT:'result', BATTLE:'battle', WIN:'win' }
 
 export default function LearnPage() {
   const { user } = useAuth()
@@ -206,6 +206,11 @@ export default function LearnPage() {
   const [team1,   setTeam1]   = useState('Équipe 1')
   const [team2,   setTeam2]   = useState('Équipe 2')
 
+  // One-vs-All state
+  const [defenderName,  setDefenderName]  = useState('Le Défenseur')
+  const [attackerNames, setAttackerNames] = useState(['Équipe A', 'Équipe B', 'Équipe C'])
+  const [ovaAttackerIdx, setOvaAttackerIdx] = useState(0) // which attacker's turn
+
   // Placement
   const [placingTeam, setPlacingTeam] = useState(1)
   const [placed,      setPlaced]      = useState([])
@@ -245,7 +250,7 @@ export default function LearnPage() {
   function addLog(msg, type='') { setBattleLog(l=>[...l.slice(-29),{msg,type,id:Date.now()+Math.random()}]) }
 
   // ── Modes ─────────────────────────────────────────────────────
-  function selectMode(m) { setMode(m); if(m==='vs-ai') setScreen(S.AI_DIFF); else setScreen(S.SETUP) }
+  function selectMode(m) { setMode(m); if(m==='vs-ai') setScreen(S.AI_DIFF); else if(m==='one-vs-all') setScreen(S.OVA_SETUP); else setScreen(S.SETUP) }
 
   // ── Placement ─────────────────────────────────────────────────
   function startPlacement(team) {
@@ -274,6 +279,13 @@ export default function LearnPage() {
   const allPlaced = gameShips.every(s=>placed.find(p=>p.id===s.id))
 
   function confirmPlacement() {
+    if (mode === 'one-vs-all') {
+      // Only defender places ships
+      team1ShipsRef.current = JSON.parse(JSON.stringify(placed))
+      team2ShipsRef.current = [] // attackers have no ships
+      startBattle()
+      return
+    }
     if (placingTeam===1) {
       team1ShipsRef.current = JSON.parse(JSON.stringify(placed))
       if (mode==='vs-ai') { team2ShipsRef.current=placeShipsRandomly(NR,NC,gameShips); startBattle() }
@@ -296,7 +308,7 @@ export default function LearnPage() {
 
   // ── Attack ─────────────────────────────────────────────────────
   function onCellClick(r, c) {
-    const board = currentTeam===1 ? attackBoard1Ref.current : attackBoard2Ref.current
+    const board = mode==='one-vs-all' ? attackBoard1Ref.current : (currentTeam===1 ? attackBoard1Ref.current : attackBoard2Ref.current)
     if (board[r][c]) { toast('Case déjà jouée','error'); return }
     setPendingCell({r,c})
     setChallenge(buildChallengeCard(game, r, c))
@@ -308,36 +320,50 @@ export default function LearnPage() {
     const {r,c} = pendingCell
     setPendingCell(null); setChallenge(null); setChallengeRevealed(null)
 
+    const currentAttackerName = mode==='one-vs-all' ? attackerNames[ovaAttackerIdx] : (currentTeam===1?team1:team2)
+
     if (!correct) {
-      addLog((currentTeam===1?team1:team2)+': réponse incorrecte — tour perdu','miss')
-      showResult('❌ INCORRECT','#ff3a3a','Tour perdu !',()=>switchTeam()); return
+      addLog(currentAttackerName+': réponse incorrecte — tour perdu','miss')
+      showResult('❌ INCORRECT','#ff3a3a','Tour perdu !', ()=>{
+        if (mode==='one-vs-all') {
+          setOvaAttackerIdx(i => (i+1) % attackerNames.length)
+          setScreen(S.BATTLE)
+        } else switchTeam()
+      }); return
     }
 
-    const targetShips = currentTeam===1 ? team2ShipsRef.current : team1ShipsRef.current
+    const targetShips = mode==='one-vs-all' ? team1ShipsRef.current : (currentTeam===1 ? team2ShipsRef.current : team1ShipsRef.current)
     const {result,sunkShip,updatedShips} = processShot(r,c,targetShips)
-    if (currentTeam===1) team2ShipsRef.current=updatedShips; else team1ShipsRef.current=updatedShips
+    if (mode==='one-vs-all') team1ShipsRef.current=updatedShips
+    else if (currentTeam===1) team2ShipsRef.current=updatedShips; else team1ShipsRef.current=updatedShips
 
-    const board   = currentTeam===1 ? attackBoard1Ref.current : attackBoard2Ref.current
+    const board   = mode==='one-vs-all' ? attackBoard1Ref.current : (currentTeam===1 ? attackBoard1Ref.current : attackBoard2Ref.current)
     const newBoard = board.map(row=>[...row])
     if (result==='sunk') sunkShip.cells.forEach(sc=>{newBoard[sc.r][sc.c]='sunk'})
     else newBoard[r][c]=result
-    if (currentTeam===1) attackBoard1Ref.current=newBoard; else attackBoard2Ref.current=newBoard
+    attackBoard1Ref.current=newBoard
     setDisplayBoard(newBoard)
 
     const label = `${game.rows[r]} + ${game.cols[c]}`
-    const tname = currentTeam===1?team1:team2
-    setShots(s=>{const n=[...s];n[currentTeam-1]++;return n})
+    setShots(s=>{const n=[...s];n[mode==='one-vs-all'?ovaAttackerIdx:currentTeam-1]++;return n})
 
-    if (result==='sunk')     addLog(tname+': '+label+' — '+sunkShip.name.toUpperCase()+' COULÉ !','sunk')
-    else if(result==='hit')  addLog(tname+': '+label+' — TOUCHÉ !','hit')
-    else                     addLog(tname+': '+label+' — À l\'eau','miss')
+    if (result==='sunk')     addLog(currentAttackerName+': '+label+' — '+sunkShip.name.toUpperCase()+' COULÉ !','sunk')
+    else if(result==='hit')  addLog(currentAttackerName+': '+label+' — TOUCHÉ !','hit')
+    else                     addLog(currentAttackerName+': '+label+' — À l\'eau','miss')
 
-    if (allSunk(updatedShips)) { setWinner(currentTeam); setScreen(S.WIN); return }
+    if (allSunk(updatedShips)) { setWinner(mode==='one-vs-all'?0:currentTeam); setScreen(S.WIN); return }
 
     if (result==='hit') {
-      showResult('🎯 TOUCHÉ !','#ff6600','REJOUE !',()=>setScreen(S.BATTLE))
+      showResult('🎯 TOUCHÉ !','#ff6600','REJOUE !',()=>{
+        if(mode==='one-vs-all') setScreen(S.BATTLE); else setScreen(S.BATTLE)
+      })
     } else {
-      showResult(result==='sunk'?'💥 COULÉ !':'💧 À L\'EAU', result==='sunk'?'#ff3333':'#4a9abb', 'Tour suivant...', ()=>switchTeam())
+      showResult(result==='sunk'?'💥 COULÉ !':'💧 À L\'EAU', result==='sunk'?'#ff3333':'#4a9abb', 'Tour suivant...', ()=>{
+        if (mode==='one-vs-all') {
+          setOvaAttackerIdx(i => (i+1) % attackerNames.length)
+          setScreen(S.BATTLE)
+        } else switchTeam()
+      })
     }
   }
 
@@ -380,7 +406,7 @@ export default function LearnPage() {
     return board
   }
 
-  function resetGame() { setScreen(S.MODE); setMode(null); setPlaced([]); setChallenge(null); setChallengeRevealed(null); setPendingCell(null); setWinner(null) }
+  function resetGame() { setScreen(S.MODE); setMode(null); setPlaced([]); setChallenge(null); setChallengeRevealed(null); setPendingCell(null); setWinner(null); setOvaAttackerIdx(0) }
 
   // ══════════════════════════════════════════════════════════════
   // RENDER
@@ -396,7 +422,7 @@ export default function LearnPage() {
       <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#ffd700',marginBottom:28,padding:'10px 14px',border:'1px solid rgba(255,215,0,.2)',background:'rgba(255,215,0,.05)',lineHeight:1.6}}>
         ℹ Avant chaque tir, l'élève dit la phrase à voix haute. Le prof valide avant que le tir parte.
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,maxWidth:560}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:16,maxWidth:760}}>
         <div className="card hover-glow fade-up" style={{padding:28,cursor:'pointer'}} onClick={()=>selectMode('local')}>
           <div style={{fontSize:38,marginBottom:12}}>👥</div>
           <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:3,color:'#00d4ff',marginBottom:8}}>2 ÉQUIPES</div>
@@ -408,6 +434,12 @@ export default function LearnPage() {
           <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:3,color:'#00d4ff',marginBottom:8}}>VS IA</div>
           <div style={{fontSize:12,color:'#4a7090',lineHeight:1.6}}>La classe joue contre le robot.</div>
           <span className="tag" style={{marginTop:12,display:'inline-block'}}>SOLO CLASSE</span>
+        </div>
+        <div className="card hover-glow fade-up" style={{padding:28,cursor:'pointer',animationDelay:'.14s'}} onClick={()=>selectMode('one-vs-all')}>
+          <div style={{fontSize:38,marginBottom:12}}>🎯</div>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:3,color:'#ff6600',marginBottom:8}}>1 VS TOUS</div>
+          <div style={{fontSize:12,color:'#4a7090',lineHeight:1.6}}>Un élève pose ses bateaux, les équipes l'attaquent à tour de rôle.</div>
+          <span className="tag" style={{marginTop:12,display:'inline-block',borderColor:'#ff6600',color:'#ff6600'}}>DÉFI</span>
         </div>
       </div>
     </div>
@@ -424,6 +456,53 @@ export default function LearnPage() {
             <div style={{fontSize:12,color:'#4a7090'}}>{d.desc}</div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+
+  if (screen===S.OVA_SETUP) return (
+    <div style={{padding:'40px',maxWidth:560,margin:'0 auto',position:'relative',zIndex:1}}>
+      <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:26,letterSpacing:5,color:'#ff6600',marginBottom:24}}>🎯 1 VS TOUS — CONFIGURATION</div>
+      <div className="card glow" style={{padding:32,position:'relative'}}>
+        <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#ff6600,transparent)'}}/>
+
+        <div className="field">
+          <label style={{color:'#ff6600'}}>🛡 Nom du défenseur</label>
+          <input value={defenderName} onChange={e=>setDefenderName(e.target.value)}
+            placeholder="ex: Maxime" maxLength={24} autoFocus
+            style={{borderColor:'rgba(255,102,0,.4)'}}/>
+        </div>
+
+        <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:10,letterSpacing:1,marginTop:8}}>
+          ⚔ ÉQUIPES ATTAQUANTES
+        </div>
+        {attackerNames.map((name, i) => (
+          <div key={i} style={{display:'flex',gap:8,marginBottom:6,alignItems:'center'}}>
+            <input value={name}
+              onChange={e=>setAttackerNames(a=>{const n=[...a];n[i]=e.target.value;return n})}
+              placeholder={`Équipe ${i+1}`} maxLength={24}
+              style={{flex:1}}/>
+            {attackerNames.length > 2 && (
+              <button className="btn sm danger" style={{flexShrink:0}}
+                onClick={()=>setAttackerNames(a=>a.filter((_,j)=>j!==i))}>✕</button>
+            )}
+          </div>
+        ))}
+        {attackerNames.length < 6 && (
+          <button className="btn sm" style={{marginBottom:16,marginTop:4}}
+            onClick={()=>setAttackerNames(a=>[...a,`Équipe ${a.length+1}`])}>
+            ＋ AJOUTER UNE ÉQUIPE
+          </button>
+        )}
+
+        <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:16,padding:'8px 12px',border:'1px solid rgba(255,102,0,.2)',background:'rgba(255,102,0,.04)',lineHeight:1.6}}>
+          ℹ Le défenseur place ses bateaux seul. Les équipes attaquent à tour de rôle en répondant aux défis.
+        </div>
+
+        <button className="btn primary full" style={{borderColor:'#ff6600',color:'#ff6600',background:'rgba(255,102,0,.1)',marginTop:4}}
+          onClick={()=>{setOvaAttackerIdx(0);startPlacement(1)}}>
+          ▶ PLACER LES BATEAUX — {defenderName.toUpperCase()}
+        </button>
       </div>
     </div>
   )
@@ -504,34 +583,50 @@ export default function LearnPage() {
   }
 
   if (screen===S.BATTLE) {
-    const tname = currentTeam===1?team1:(mode==='vs-ai'?'Classe':team2)
-    const ename = currentTeam===1?(mode==='vs-ai'?'IA':team2):team1
+    const isOVA  = mode==='one-vs-all'
     const isVsAI = mode==='vs-ai'
+    const tname  = isOVA ? attackerNames[ovaAttackerIdx] : (currentTeam===1?team1:(isVsAI?'Classe':team2))
+    const ename  = isOVA ? defenderName : (currentTeam===1?(isVsAI?'IA':team2):team1)
     return (
       <div style={{padding:'20px 32px',maxWidth:1100,margin:'0 auto',position:'relative',zIndex:1}}>
         {/* Status */}
         <div className="card" style={{padding:'14px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
-          <span className="dot gold"/>
-          <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:'#ffd700'}}>
-            ⚔ {tname.toUpperCase()} — CLIQUE ET DIS LA PHRASE !
+          <span className="dot" style={{background: isOVA?'#ff6600':'gold'}}/>
+          <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:isOVA?'#ff6600':'#ffd700'}}>
+            {isOVA ? '🎯' : '⚔'} {tname.toUpperCase()} — CLIQUE ET DIS LA PHRASE !
           </span>
+          {isOVA && (
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginLeft:8}}>
+              {attackerNames.map((n,i)=>(
+                <span key={i} style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,padding:'2px 8px',
+                  border:`1px solid ${i===ovaAttackerIdx?'#ff6600':'#1a3a5c'}`,
+                  color:i===ovaAttackerIdx?'#ff6600':'#4a7090',
+                  background:i===ovaAttackerIdx?'rgba(255,102,0,.1)':'transparent'}}>
+                  {n}
+                </span>
+              ))}
+            </div>
+          )}
           <div style={{marginLeft:'auto',display:'flex',gap:16}}>
-            <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{team1}: {shots[0]} tir{shots[0]!==1?'s':''}</span>
-            <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{isVsAI?'IA':team2}: {shots[1]} tir{shots[1]!==1?'s':''}</span>
+            {isOVA ? (
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>
+                🛡 {defenderName} — {team1ShipsRef.current.filter(s=>!s.sunk).length} bateau(x) restant(s)
+              </span>
+            ) : (<>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{team1}: {shots[0]} tir{shots[0]!==1?'s':''}</span>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{isVsAI?'IA':team2}: {shots[1]} tir{shots[1]!==1?'s':''}</span>
+            </>)}
           </div>
         </div>
 
-        {/* 2 boards in vs-ai, 1 board in local */}
+        {/* Boards */}
         <div style={{display:'grid',gridTemplateColumns:isVsAI?'1fr 1fr':'1fr',gap:16,marginBottom:16}}>
-          {/* Attack board — always shown */}
           <div className="card" style={{padding:20}}>
             <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:3,color:'#ff3a3a',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
-              <span className="dot red"/>MER ENNEMIE — {ename.toUpperCase()}
+              <span className="dot red"/>MER {isOVA?'DU DÉFENSEUR':'ENNEMIE'} — {ename.toUpperCase()}
             </div>
             <LearnGrid board={displayBoard} game={game} onCellClick={onCellClick} interactive={true} hideShips={true} theme={SEA_THEMES[equippedTheme]||SEA_THEMES.default}/>
           </div>
-
-          {/* Defence board — only in vs-ai mode */}
           {isVsAI && (
             <div className="card" style={{padding:20}}>
               <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:3,color:'#00d4ff',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
@@ -547,7 +642,7 @@ export default function LearnPage() {
 
   if (screen===S.CHALLENGE && challenge) {
     const { row, col, prompt, form, answer, formLabel } = challenge
-    const tname = currentTeam===1?team1:team2
+    const tname = mode==='one-vs-all' ? attackerNames[ovaAttackerIdx] : (currentTeam===1?team1:team2)
     const isLatin = game.subject === 'Latin'
     const formColor = isLatin
       ? (form==='positive'?'#00d4ff':form==='negative'?'#aa44ff':'#ffd700')
@@ -637,16 +732,18 @@ export default function LearnPage() {
   )
 
   if (screen===S.WIN) {
-    const winTeam = winner===1?team1:(mode==='vs-ai'?'L\'IA':team2)
+    const isOVA = mode==='one-vs-all'
+    const winTeam = isOVA ? 'LES ATTAQUANTS' : (winner===1?team1:(mode==='vs-ai'?'L\'IA':team2))
+    const winMsg  = isOVA ? `La flotte de ${defenderName} a été coulée !` : `${team1}: ${shots[0]} tirs · ${mode==='vs-ai'?'IA':team2}: ${shots[1]} tirs`
     return (
       <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'calc(100vh - 60px)',position:'relative',zIndex:1}}>
         <div className="fade-up" style={{textAlign:'center',padding:40,maxWidth:600}}>
-          <div style={{fontSize:80,marginBottom:20}}>🏆</div>
-          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:'clamp(36px,8vw,72px)',letterSpacing:6,color:'#ffd700',textShadow:'0 0 40px rgba(255,215,0,.4)',marginBottom:12}}>
-            {winTeam.toUpperCase()} GAGNE !
+          <div style={{fontSize:80,marginBottom:20}}>{isOVA?'💥':'🏆'}</div>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:'clamp(36px,8vw,72px)',letterSpacing:6,color:isOVA?'#ff6600':'#ffd700',textShadow:`0 0 40px ${isOVA?'rgba(255,102,0,.4)':'rgba(255,215,0,.4)'}`,marginBottom:12}}>
+            {winTeam.toUpperCase()} {isOVA?'GAGNENT !':'GAGNE !'}
           </div>
           <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:13,color:'#4a7090',marginBottom:36}}>
-            {team1}: {shots[0]} tirs · {mode==='vs-ai'?'IA':team2}: {shots[1]} tirs
+            {winMsg}
           </div>
           <div style={{display:'flex',gap:14,justifyContent:'center',flexWrap:'wrap'}}>
             <button className="btn primary lg" onClick={resetGame}>↺ REJOUER</button>
