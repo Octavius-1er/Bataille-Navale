@@ -21,6 +21,15 @@ const tabStyle = (active) => ({
   cursor:'pointer', transition:'all .15s', whiteSpace:'nowrap',
 })
 
+const CUTSCENES = {
+  fireworks: { id:'fireworks', name:"Feux d'artifice", icon:'🎆', color:'#ffd700' },
+  victory:   { id:'victory',   name:'Victoire',        icon:'🏆', color:'#ffd700' },
+  disco:     { id:'disco',     name:'Disco Party',     icon:'🪩', color:'#ff00ff' },
+  alert:     { id:'alert',     name:'Alerte Rouge',    icon:'🚨', color:'#ff3a3a' },
+  rain:      { id:'rain',      name:'Pluie de Pieces', icon:'🪙', color:'#ffd700' },
+  levelup:   { id:'levelup',   name:'Level Up',        icon:'🚀', color:'#00ff88' },
+}
+
 export default function AdminPage() {
   const { user, profile } = useAuth()
   const toast    = useToast()
@@ -284,16 +293,6 @@ export default function AdminPage() {
     toast(`Don envoyé à ${sent} joueurs !`, 'success')
     setMassSending(false)
     setMassGiftMsg(''); setMassGiftCoins(0); setMassGiftPack('')
-  }
-
-  // ── Cutscene ─────────────────────────────────────────────────────
-  const CUTSCENES = {
-    fireworks: { id:'fireworks', name:'Feux d'artifice', icon:'🎆', color:'#ffd700' },
-    victory:   { id:'victory',   name:'Victoire',         icon:'🏆', color:'#ffd700' },
-    disco:     { id:'disco',     name:'Disco Party',      icon:'🪩', color:'#ff00ff' },
-    alert:     { id:'alert',     name:'Alerte Rouge',     icon:'🚨', color:'#ff3a3a' },
-    rain:      { id:'rain',      name:'Pluie de Pièces',  icon:'🪙', color:'#ffd700' },
-    levelup:   { id:'levelup',   name:'Level Up',         icon:'⬆️', color:'#00ff88' },
   }
 
   async function triggerCutscene() {
