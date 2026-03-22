@@ -77,7 +77,7 @@ function ItemIcon({ itemId, size=72 }) {
 }
 
 // ── Reel card ─────────────────────────────────────────────────────
-function ReelCard({ item, highlight=false, size=90 }) {
+function ReelCard({ item, highlight=false, size=78 }) {
   if (!item) return <div style={{width:size,height:size+44,flexShrink:0}}/>
   const r = RARITY[item.rarity] || RARITY.common
   return (
