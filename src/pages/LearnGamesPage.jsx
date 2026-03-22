@@ -82,7 +82,7 @@ export default function LearnGamesPage() {
   async function loadAdmin() {
     if (!user) return
     try {
-      const snap = await getDoc(doc(db, 'players', user.uid))
+      const snap = await getDoc(doc(db, 'users', user.uid))
       setIsAdmin(snap.exists() ? !!snap.data().isAdmin : false)
     } catch { setIsAdmin(false) }
   }
