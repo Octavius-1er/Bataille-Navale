@@ -635,7 +635,7 @@ Réponds UNIQUEMENT avec le JSON, rien d'autre.`
               {aiImagePreview && (
                 <button className="btn primary full" onClick={analyzeImage} disabled={aiLoading}
                   style={{borderColor:'#aa44ff',color:'#aa44ff',marginBottom:14}}>
-                  {aiLoading ? '⏳ ANALYSE EN COURS...' : '🔍 ANALYSER L'IMAGE AVEC L'IA'}
+                  {aiLoading ? '⏳ ANALYSE EN COURS...' : "🔍 ANALYSER L'IMAGE AVEC L'IA"}
                 </button>
               )}
 
