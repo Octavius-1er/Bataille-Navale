@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { DEFAULT_GAME } from '../lib/defaultGame'
 import {
   collection, query, where, getDocs, addDoc, deleteDoc,
-  doc, serverTimestamp,
+  doc, getDoc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../hooks/useAuth'
@@ -46,6 +46,7 @@ export default function LearnGamesPage() {
   const navigate = useNavigate()
 
   const [myGames,   setMyGames]   = useState(null)
+  const [isAdmin,   setIsAdmin]   = useState(false)
   const [creating,  setCreating]  = useState(false)
   const [saving,    setSaving]    = useState(false)
   const [search,    setSearch]    = useState('')
@@ -67,7 +68,7 @@ export default function LearnGamesPage() {
   const [aiLoading,   setAiLoading]   = useState(false)
   const [aiError,     setAiError]     = useState('')
 
-  useEffect(() => { loadGames() }, [user])
+  useEffect(() => { loadGames(); loadAdmin() }, [user])
 
   // Rebuild cells when rows/cols count changes
   useEffect(() => {
@@ -77,6 +78,14 @@ export default function LearnGamesPage() {
       )
     )
   }, [rows.length, cols.length])
+
+  async function loadAdmin() {
+    if (!user) return
+    try {
+      const snap = await getDoc(doc(db, 'players', user.uid))
+      setIsAdmin(snap.exists() ? !!snap.data().isAdmin : false)
+    } catch { setIsAdmin(false) }
+  }
 
   async function loadGames() {
     if (!user) return
@@ -298,6 +307,17 @@ Réponds UNIQUEMENT avec le JSON, rien d'autre.`
   // ══════════════════════════════════════════════════════════════
   // CREATION FORM
   // ══════════════════════════════════════════════════════════════
+  if (creating && !isAdmin) return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'calc(100vh - 60px)', position:'relative', zIndex:1 }}>
+      <div style={{ textAlign:'center', padding:40 }}>
+        <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
+        <div style={{ fontFamily:'Bebas Neue,sans-serif', fontSize:28, letterSpacing:4, color:'#ff3a3a', marginBottom:8 }}>ACCÈS REFUSÉ</div>
+        <div style={{ fontFamily:'Share Tech Mono,monospace', fontSize:12, color:'#4a7090', marginBottom:24 }}>Seuls les administrateurs peuvent créer des jeux.</div>
+        <button className="btn" onClick={() => setCreating(false)}>⬅ RETOUR</button>
+      </div>
+    </div>
+  )
+
   if (creating) return (
     <div style={{ padding:'32px 40px', maxWidth:1100, margin:'0 auto', position:'relative', zIndex:1 }}>
 
@@ -687,10 +707,17 @@ Réponds UNIQUEMENT avec le JSON, rien d'autre.`
           <div style={{ fontFamily:'Bebas Neue,sans-serif',fontSize:32,letterSpacing:5,color:'#00d4ff',marginBottom:4 }}>📚 JEUX ÉDUCATIFS</div>
           <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',letterSpacing:1 }}>SÉLECTIONNEZ UN JEU POUR JOUER EN CLASSE</div>
         </div>
-        <button className="btn primary" style={{ marginLeft:'auto' }} onClick={() => { setCreating(true); setStep(1) }}>
-          ✚ CRÉER UN JEU
-        </button>
+        {isAdmin && (
+          <button className="btn primary" style={{ marginLeft:'auto' }} onClick={() => { setCreating(true); setStep(1) }}>
+            ✚ CRÉER UN JEU
+          </button>
+        )}
       </div>
+      {!isAdmin && (
+        <div style={{ fontFamily:'Share Tech Mono,monospace', fontSize:11, color:'#4a7090', marginBottom:16, padding:'10px 14px', border:'1px solid #1a3a5c', background:'rgba(0,0,0,.2)', display:'inline-block' }}>
+          🔒 Seuls les administrateurs peuvent créer des jeux.
+        </div>
+      )}
 
       {/* Search */}
       <input
