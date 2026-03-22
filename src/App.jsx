@@ -8,6 +8,7 @@ import GamePage from './pages/GamePage'
 import LearnPage from './pages/LearnPage'
 import LearnGamesPage from './pages/LearnGamesPage'
 import AdminPage from './pages/AdminPage'
+import CutsceneOverlay from './components/CutsceneOverlay'
 import ShopPage from './pages/ShopPage'
 import LockerPage from './pages/LockerPage'
 import InboxPage from './pages/InboxPage'
@@ -30,6 +31,8 @@ export default function App() {
   if (user === undefined) return <Loader />
 
   return (
+    <>
+    <CutsceneOverlay/>
     <Routes>
       <Route element={<Layout />}>
         <Route path="/"         element={user ? <Navigate to="/dashboard" replace /> : <HomePage />} />
@@ -44,5 +47,6 @@ export default function App() {
         <Route path="*"          element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </>
   )
 }
