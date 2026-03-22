@@ -11,7 +11,7 @@ import { EVENT_TYPES } from '../hooks/useActiveEvent'
 import { ALL_ITEMS, SHIP_SKINS, SEA_THEMES, RARITY, PACKS, openPack } from '../lib/shopData'
 import { useToast } from '../components/Toast'
 
-const TAB = { USERS:'users', GAMES:'games', LEARN:'learn', ANNOUNCE:'announce', EVENTS:'events', SPECTATE:'spectate', STATS:'stats' }
+const TAB = { USERS:'users', GAMES:'games', LEARN:'learn', ANNOUNCE:'announce', EVENTS:'events', SPECTATE:'spectate', STATS:'stats', MASSGIFT:'massgift', CUTSCENE:'cutscene' }
 
 const tabStyle = (active) => ({
   padding:'7px 14px', fontFamily:'Bebas Neue,sans-serif', fontSize:13, letterSpacing:2,
@@ -57,6 +57,19 @@ export default function AdminPage() {
   const [rewardLosses,  setRewardLosses]  = useState(0)
   const [rewardPack,    setRewardPack]    = useState('')
   const [rewardPackCount, setRewardPackCount] = useState(1)
+
+  // Mass gift state
+  const [massGiftTarget,  setMassGiftTarget]  = useState('all')  // all | random
+  const [massGiftCount,   setMassGiftCount]   = useState(20)
+  const [massGiftCoins,   setMassGiftCoins]   = useState(0)
+  const [massGiftPack,    setMassGiftPack]    = useState('')
+  const [massGiftMsg,     setMassGiftMsg]     = useState('')
+  const [massSending,     setMassSending]     = useState(false)
+
+  // Cutscene state
+  const [cutsceneType,    setCutsceneType]    = useState('fireworks')
+  const [cutsceneMsg,     setCutsceneMsg]     = useState('')
+  const [cutsceneActive,  setCutsceneActive]  = useState(false)
 
   // Spectate
   const [spectateRoom,  setSpectateRoom]  = useState(null)
@@ -225,6 +238,81 @@ export default function AdminPage() {
     setSpectateRoom(null); setSpectateData(null)
   }
 
+  // ── Mass Gift ────────────────────────────────────────────────────
+  async function sendMassGift() {
+    if (!massGiftCoins && !massGiftPack && !massGiftMsg.trim()) {
+      toast('Ajoutez une récompense', 'error'); return
+    }
+    if (!users?.length) { toast('Chargez les utilisateurs d'abord', 'error'); return }
+    setMassSending(true)
+
+    // Select targets
+    let targets = users.filter(u => !u.isAnonymous && u.email)
+    if (massGiftTarget === 'random') {
+      // Shuffle and pick
+      targets = [...targets].sort(() => Math.random() - 0.5).slice(0, massGiftCount)
+    }
+
+    const msg = massGiftMsg.trim() || `🎁 Don de l'admin !${massGiftCoins?` +${massGiftCoins} 🪙`:''}${massGiftPack?` + Pack ${PACKS[massGiftPack]?.name}`:''}`
+
+    let sent = 0
+    for (const u of targets) {
+      try {
+        let packItems = null
+        if (massGiftPack && PACKS[massGiftPack]) {
+          const snap = await getDoc(doc(db,'users',u.id))
+          const owned = snap.exists() ? (snap.data().owned||[]) : []
+          packItems = openPack(PACKS[massGiftPack], owned).map(i=>i.id)
+        }
+        await addDoc(collection(db,'inbox'), {
+          uid: u.id, message: msg, from: profile?.username||'Admin',
+          type: 'reward',
+          coins:     massGiftCoins || 0,
+          pack:      massGiftPack  || null,
+          packItems: packItems     || null,
+          wins: 0, losses: 0, skin: null,
+          claimed: false, read: false,
+          createdAt: serverTimestamp(),
+        })
+        if (massGiftCoins > 0) {
+          await updateDoc(doc(db,'users',u.id), { coins: increment(massGiftCoins) })
+        }
+        sent++
+      } catch {}
+    }
+
+    toast(`Don envoyé à ${sent} joueurs !`, 'success')
+    setMassSending(false)
+    setMassGiftMsg(''); setMassGiftCoins(0); setMassGiftPack('')
+  }
+
+  // ── Cutscene ─────────────────────────────────────────────────────
+  const CUTSCENES = {
+    fireworks: { id:'fireworks', name:'Feux d'artifice', icon:'🎆', color:'#ffd700' },
+    victory:   { id:'victory',   name:'Victoire',         icon:'🏆', color:'#ffd700' },
+    disco:     { id:'disco',     name:'Disco Party',      icon:'🪩', color:'#ff00ff' },
+    alert:     { id:'alert',     name:'Alerte Rouge',     icon:'🚨', color:'#ff3a3a' },
+    rain:      { id:'rain',      name:'Pluie de Pièces',  icon:'🪙', color:'#ffd700' },
+    levelup:   { id:'levelup',   name:'Level Up',         icon:'⬆️', color:'#00ff88' },
+  }
+
+  async function triggerCutscene() {
+    const scene = CUTSCENES[cutsceneType]
+    await addDoc(collection(db,'cutscenes'), {
+      type:    cutsceneType,
+      message: cutsceneMsg.trim() || scene.name,
+      active:  true,
+      createdAt: serverTimestamp(),
+    })
+    toast(`Cutscène "${scene.name}" déclenchée !`, 'success')
+    setCutsceneMsg('')
+    // Auto-disable after 8s
+    setTimeout(async () => {
+      const snap = await getDocs(query(collection(db,'cutscenes'), orderBy('createdAt','desc'), limit(1)))
+      if (!snap.empty) await updateDoc(snap.docs[0].ref, { active: false })
+    }, 8000)
+  }
+
   async function stopGame(roomId) {
     if (!confirm('Forcer la fin de cette partie ?')) return
     await updateDoc(doc(db,'rooms',roomId),{status:'ended',winner:'admin_stopped'})
@@ -296,6 +384,8 @@ export default function AdminPage() {
         <div style={{marginLeft:'auto',display:'flex',gap:6,flexWrap:'wrap'}}>
           {[
             [TAB.USERS,'👥 USERS'],
+            [TAB.MASSGIFT,'🎁 DON GLOBAL'],
+            [TAB.CUTSCENE,'🎬 CUTSCÈNE'],
             [TAB.ANNOUNCE,'📢 ANNONCES'],
             [TAB.EVENTS,'🎉 EVENTS'],
             [TAB.SPECTATE,'👁 SPECTATE'],
@@ -593,6 +683,121 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* ══ MASS GIFT ═══════════════════════════════════════════════ */}
+      {tab===TAB.MASSGIFT && (
+        <div style={{maxWidth:600}}>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:4,color:'#ffd700',marginBottom:20}}>🎁 DON GLOBAL</div>
+
+          {/* Target */}
+          <div className="field">
+            <label>DESTINATAIRES</label>
+            <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
+              {[['all','🌍 Tous les joueurs'],['random','🎲 Aléatoire']].map(([v,l])=>(
+                <div key={v} onClick={()=>setMassGiftTarget(v)}
+                  style={{padding:'8px 16px',border:`1px solid ${massGiftTarget===v?'#ffd700':'#1a3a5c'}`,background:massGiftTarget===v?'rgba(255,215,0,.1)':'transparent',color:massGiftTarget===v?'#ffd700':'#4a7090',cursor:'pointer',fontFamily:'Share Tech Mono,monospace',fontSize:11}}>
+                  {l}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {massGiftTarget==='random' && (
+            <div className="field">
+              <label>NOMBRE DE JOUEURS</label>
+              <div style={{display:'flex',gap:8,marginTop:4,flexWrap:'wrap'}}>
+                {[5,10,20,50,100].map(n=>(
+                  <div key={n} onClick={()=>setMassGiftCount(n)}
+                    style={{padding:'6px 16px',border:`1px solid ${massGiftCount===n?'#ffd700':'#1a3a5c'}`,background:massGiftCount===n?'rgba(255,215,0,.1)':'transparent',color:massGiftCount===n?'#ffd700':'#4a7090',cursor:'pointer',fontFamily:'Bebas Neue,sans-serif',fontSize:16}}>
+                    {n}
+                  </div>
+                ))}
+                <input type="number" value={massGiftCount} onChange={e=>setMassGiftCount(+e.target.value)} min={1} max={9999}
+                  style={{width:80,background:'#050d1a',border:'1px solid #1a3a5c',color:'#ffd700',padding:'6px 10px',fontFamily:'Bebas Neue,sans-serif',fontSize:16,outline:'none'}}/>
+              </div>
+            </div>
+          )}
+
+          {/* Coins */}
+          <div className="field">
+            <label>🪙 PIÈCES PAR JOUEUR</label>
+            <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4}}>
+              <input type="number" min="0" value={massGiftCoins||''} onChange={e=>setMassGiftCoins(+e.target.value)}
+                placeholder="0" style={{width:100,background:'#050d1a',border:'1px solid #1a3a5c',color:'#ffd700',padding:'8px 12px',fontFamily:'Bebas Neue,sans-serif',fontSize:18,outline:'none'}}/>
+              {[10,50,100,500].map(n=>(
+                <button key={n} onClick={()=>setMassGiftCoins(n)} style={{padding:'4px 10px',background:'rgba(255,215,0,.1)',border:'1px solid rgba(255,215,0,.3)',color:'#ffd700',fontFamily:'Share Tech Mono,monospace',fontSize:10,cursor:'pointer'}}>+{n}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Pack */}
+          <div className="field">
+            <label>📦 PACK PAR JOUEUR</label>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:4}}>
+              <div onClick={()=>setMassGiftPack('')} style={{padding:'6px 12px',border:`1px solid ${!massGiftPack?'#00d4ff':'#1a3a5c'}`,background:!massGiftPack?'rgba(0,212,255,.1)':'transparent',color:!massGiftPack?'#00d4ff':'#4a7090',cursor:'pointer',fontFamily:'Share Tech Mono,monospace',fontSize:10}}>Aucun</div>
+              {Object.values(PACKS).map(pack=>(
+                <div key={pack.id} onClick={()=>setMassGiftPack(pack.id)}
+                  style={{padding:'6px 12px',border:`1px solid ${massGiftPack===pack.id?pack.color:'#1a3a5c'}`,background:massGiftPack===pack.id?`${pack.color}15`:'transparent',color:massGiftPack===pack.id?pack.color:'#4a7090',cursor:'pointer',fontFamily:'Share Tech Mono,monospace',fontSize:10}}>
+                  {pack.icon} {pack.name}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Message */}
+          <div className="field">
+            <label>MESSAGE (optionnel)</label>
+            <input value={massGiftMsg} onChange={e=>setMassGiftMsg(e.target.value)} placeholder="ex: Joyeuses fêtes à tous ! 🎄" maxLength={200}
+              style={{width:'100%',background:'#050d1a',border:'1px solid #1a3a5c',color:'#c8e6f0',padding:'9px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:12,outline:'none'}}/>
+          </div>
+
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:12}}>
+            {massGiftTarget==='all' ? `→ Envoi à ${users?.filter(u=>!u.isAnonymous).length||'?'} joueurs` : `→ Envoi à ${massGiftCount} joueurs aléatoires`}
+          </div>
+
+          <button className="btn primary full" onClick={sendMassGift} disabled={massSending||!users?.length}
+            style={{borderColor:'#ffd700',color:'#ffd700',fontSize:16}}>
+            {massSending ? '⏳ ENVOI EN COURS...' : '🎁 ENVOYER À TOUS'}
+          </button>
+
+          {!users?.length && <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ff3a3a',marginTop:8}}>⚠ Ouvrez l'onglet USERS d'abord pour charger la liste</div>}
+        </div>
+      )}
+
+      {/* ══ CUTSCENE ═════════════════════════════════════════════════ */}
+      {tab===TAB.CUTSCENE && (
+        <div style={{maxWidth:700}}>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:4,color:'#00d4ff',marginBottom:8}}>🎬 CUTSCÈNES</div>
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:20}}>
+            Déclenche une animation spectaculaire pour tous les joueurs connectés en temps réel.
+          </div>
+
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:12,marginBottom:24}}>
+            {Object.values(CUTSCENES).map(scene=>(
+              <div key={scene.id} onClick={()=>setCutsceneType(scene.id)}
+                style={{padding:20,border:`2px solid ${cutsceneType===scene.id?scene.color:'#1a3a5c'}`,background:cutsceneType===scene.id?`${scene.color}15`:'#091525',cursor:'pointer',textAlign:'center',transition:'all .2s',boxShadow:cutsceneType===scene.id?`0 0 16px ${scene.color}44`:'none'}}>
+                <div style={{fontSize:36,marginBottom:8}}>{scene.icon}</div>
+                <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:14,letterSpacing:2,color:cutsceneType===scene.id?scene.color:'#c8e6f0'}}>{scene.name}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="field">
+            <label>MESSAGE D'ACCOMPAGNEMENT (optionnel)</label>
+            <input value={cutsceneMsg} onChange={e=>setCutsceneMsg(e.target.value)}
+              placeholder={`ex: ${CUTSCENES[cutsceneType]?.name} !`} maxLength={80}
+              style={{width:'100%',background:'#050d1a',border:'1px solid #1a3a5c',color:'#c8e6f0',padding:'9px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:12,outline:'none'}}/>
+          </div>
+
+          <button className="btn primary full" onClick={triggerCutscene}
+            style={{borderColor:CUTSCENES[cutsceneType]?.color,color:CUTSCENES[cutsceneType]?.color,fontSize:18,padding:'14px'}}>
+            {CUTSCENES[cutsceneType]?.icon} DÉCLENCHER — {CUTSCENES[cutsceneType]?.name.toUpperCase()}
+          </button>
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginTop:8,textAlign:'center'}}>
+            La cutscène dure 8 secondes et se coupe automatiquement.
+          </div>
+        </div>
+      )}
+
       {/* ══ GAMES ════════════════════════════════════════════════ */}
       {tab===TAB.GAMES && games && (
         <div>
@@ -681,8 +886,16 @@ export default function AdminPage() {
           <div className="card glow fade-up" style={{width:'100%',maxWidth:520,padding:36,position:'relative'}}>
             <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#ffd700,transparent)'}}/>
             <button onClick={()=>setRewardUser(null)} style={{position:'absolute',top:14,right:18,background:'none',border:'none',color:'#4a7090',fontSize:18,cursor:'pointer'}}>✕</button>
-            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:3,color:'#ffd700',marginBottom:2}}>🎁 DON ADMIN</div>
-            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:20}}>→ {rewardUser.username}</div>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:3,color:'#ffd700',marginBottom:2}}>⚙️ MODIFIER — {rewardUser.username}</div>
+            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:20}}>UID: {rewardUser.id.slice(0,16)}…</div>
+
+            {/* Current stats */}
+            <div style={{display:'flex',gap:12,marginBottom:20,padding:'10px 14px',background:'#050d1a',border:'1px solid #1a3a5c',flexWrap:'wrap'}}>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#ffd700'}}>🪙 {rewardUser.coins||0}</span>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#00ff88'}}>🏆 {rewardUser.wins||0}V</span>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#ff6666'}}>💀 {rewardUser.losses||0}D</span>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{(rewardUser.owned||[]).length} skins</span>
+            </div>
 
             {/* Message */}
             <div className="field">
@@ -694,15 +907,15 @@ export default function AdminPage() {
 
             {/* Coins */}
             <div className="field">
-              <label>🪙 Pièces à donner</label>
-              <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4}}>
-                <input type="number" min="0" max="99999" value={rewardCoins||''} onChange={e=>setRewardCoins(+e.target.value)}
-                  placeholder="0" style={{width:'120px',background:'#050d1a',border:'1px solid #1a3a5c',color:'#ffd700',padding:'8px 12px',fontFamily:'Bebas Neue,sans-serif',fontSize:18,outline:'none'}}/>
-                <div style={{display:'flex',gap:6}}>
-                  {[50,100,500,1000].map(n=>(
+              <label>🪙 Modifier les pièces</label>
+              <div style={{display:'flex',gap:8,alignItems:'center',marginTop:4,flexWrap:'wrap'}}>
+                <input type="number" min="-99999" max="99999" value={rewardCoins||''} onChange={e=>setRewardCoins(+e.target.value)}
+                  placeholder="0 (négatif = retirer)" style={{width:'160px',background:'#050d1a',border:'1px solid #1a3a5c',color:'#ffd700',padding:'8px 12px',fontFamily:'Bebas Neue,sans-serif',fontSize:16,outline:'none'}}/>
+                <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                  {[-500,-100,100,500,1000].map(n=>(
                     <button key={n} onClick={()=>setRewardCoins(n)}
-                      style={{padding:'4px 10px',background:'rgba(255,215,0,.1)',border:'1px solid rgba(255,215,0,.3)',color:'#ffd700',fontFamily:'Share Tech Mono,monospace',fontSize:10,cursor:'pointer'}}>
-                      +{n}
+                      style={{padding:'4px 8px',background:n<0?'rgba(255,58,58,.1)':'rgba(255,215,0,.1)',border:`1px solid ${n<0?'rgba(255,58,58,.3)':'rgba(255,215,0,.3)'}`,color:n<0?'#ff6666':'#ffd700',fontFamily:'Share Tech Mono,monospace',fontSize:9,cursor:'pointer'}}>
+                      {n>0?'+':''}{n}
                     </button>
                   ))}
                 </div>
@@ -727,6 +940,26 @@ export default function AdminPage() {
                 </optgroup>
               </select>
             </div>
+
+            {/* Remove skin */}
+            {(rewardUser.owned||[]).length > 0 && (
+              <div className="field">
+                <label>🗑 Retirer un skin</label>
+                <select onChange={e => {
+                  if (!e.target.value) return
+                  if (!confirm(`Retirer "${e.target.value}" de ${rewardUser.username} ?`)) return
+                  updateDoc(doc(db,'users',rewardUser.id),{owned: rewardUser.owned.filter(x=>x!==e.target.value)})
+                    .then(()=>{ toast('Skin retiré','info'); setRewardUser({...rewardUser,owned:rewardUser.owned.filter(x=>x!==e.target.value)}) })
+                  e.target.value = ''
+                }}
+                  style={{width:'100%',background:'#050d1a',border:'1px solid rgba(255,58,58,.3)',color:'#ff6666',padding:'8px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:12,outline:'none',marginTop:4}}>
+                  <option value="">— Sélectionner pour retirer —</option>
+                  {(rewardUser.owned||[]).map(id=>(
+                    <option key={id} value={id}>{id}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Pack */}
             <div className="field">
@@ -765,19 +998,19 @@ export default function AdminPage() {
             {/* Stats */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               <div className="field" style={{marginBottom:0}}>
-                <label>🏆 + Victoires</label>
-                <input type="number" min="0" max="9999" value={rewardWins||''} onChange={e=>setRewardWins(+e.target.value)}
+                <label>🏆 Victoires (négatif = retirer)</label>
+                <input type="number" min="-9999" max="9999" value={rewardWins||''} onChange={e=>setRewardWins(+e.target.value)}
                   placeholder="0" style={{width:'100%',background:'#050d1a',border:'1px solid rgba(0,255,136,.3)',color:'#00ff88',padding:'8px 12px',fontFamily:'Bebas Neue,sans-serif',fontSize:18,outline:'none',marginTop:4}}/>
               </div>
               <div className="field" style={{marginBottom:0}}>
-                <label>💀 + Défaites</label>
-                <input type="number" min="0" max="9999" value={rewardLosses||''} onChange={e=>setRewardLosses(+e.target.value)}
+                <label>💀 Défaites (négatif = retirer)</label>
+                <input type="number" min="-9999" max="9999" value={rewardLosses||''} onChange={e=>setRewardLosses(+e.target.value)}
                   placeholder="0" style={{width:'100%',background:'#050d1a',border:'1px solid rgba(255,102,102,.3)',color:'#ff6666',padding:'8px 12px',fontFamily:'Bebas Neue,sans-serif',fontSize:18,outline:'none',marginTop:4}}/>
               </div>
             </div>
 
             <button className="btn primary full" style={{marginTop:20,borderColor:'#ffd700',color:'#ffd700'}} onClick={()=>sendReward(rewardUser.id)}>
-              🎁 ENVOYER LE DON
+              ✓ APPLIQUER LES MODIFICATIONS
             </button>
           </div>
         </div>
