@@ -2,7 +2,7 @@
 // Boîte de réception — messages système et récompenses admin
 
 import { useState, useEffect } from 'react'
-import { collection, query, where, getDocs, updateDoc, doc, increment, arrayUnion } from 'firebase/firestore'
+import { collection, query, where, getDocs, updateDoc, deleteDoc, doc, increment, arrayUnion } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
