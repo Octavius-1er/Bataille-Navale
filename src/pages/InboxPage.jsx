@@ -34,6 +34,12 @@ export default function InboxPage() {
     setMessages(m => m.map(x => x.id===id ? {...x, read:true} : x))
   }
 
+  async function deleteMessage(id) {
+    await deleteDoc(doc(db,'inbox',id))
+    setMessages(m => m.filter(x => x.id !== id))
+    toast('Message supprimé','info')
+  }
+
   async function claimReward(msg) {
     if (msg.claimed) return
     setClaiming(msg.id)
@@ -194,6 +200,12 @@ export default function InboxPage() {
                       Marquer comme lu
                     </button>
                   )}
+                  <button onClick={() => deleteMessage(msg.id)}
+                    style={{ padding:'8px 14px', fontFamily:'Share Tech Mono,monospace', fontSize:10,
+                      background:'transparent', border:'1px solid rgba(255,58,58,.3)', color:'#ff3a3a', cursor:'pointer',
+                      marginLeft:'auto' }}>
+                    🗑 SUPPRIMER
+                  </button>
                 </div>
               </div>
             )
