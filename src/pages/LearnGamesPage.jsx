@@ -1,759 +1,662 @@
-// src/pages/LearnGamesPage.jsx
-// Sélection et création de jeux éducatifs
-// Un jeu = un nom + des lignes + des colonnes + des cellules (contenu de chaque case)
+// src/pages/LearnPage.jsx
+// Mode classe projeté — utilise le jeu sélectionné dans LearnGamesPage
+// La carte montre : ligne + colonne + contenu de la case
+// Le prof valide oralement, puis le tir part ou le tour est perdu
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DEFAULT_GAME } from '../lib/defaultGame'
-import {
-  collection, query, where, getDocs, addDoc, deleteDoc,
-  doc, serverTimestamp,
-} from 'firebase/firestore'
-import { db } from '../lib/firebase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
+import { DEFAULT_GAME } from '../lib/defaultGame'
+import { SEA_THEMES, SHIP_SKINS } from '../lib/shopData'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import {
+  LEARN_SHIPS_CONFIG,
+  createEmptyBoard, getShipCells, isValidPlacement,
+  placeShipsRandomly, boardFromShips, processShot,
+  aiPickCell, allSunk,
+} from '../lib/gameEngine'
 
-
-// ── Couleurs par matière ──────────────────────────────────────────
-const SUBJECTS = ['Anglais','Allemand','Espagnol','Français','Latin','Histoire','Géographie','Sciences','Maths','Autre']
-
-// ── Bateaux disponibles ───────────────────────────────────────────
-const ALL_SHIPS = [
-  { id:'carrier',    name:'Porte-avions', size:5, label:'✈', color:'#66aaee' },
-  { id:'battleship', name:'Cuirassé',     size:4, label:'⚔', color:'#aa77ee' },
-  { id:'cruiser',    name:'Croiseur',     size:3, label:'⛴', color:'#55cc88' },
-  { id:'submarine',  name:'Sous-marin',   size:3, label:'◈', color:'#44bb77' },
-  { id:'destroyer',  name:'Destroyer',    size:2, label:'⚡', color:'#ee8844' },
-  { id:'patrol',     name:'Patrouille',   size:2, label:'🔹', color:'#cc88cc' },
-]
-const SUBJECT_STYLE = {
-  'Anglais':     { bg:'#0e2a1a', border:'#339966', color:'#55cc88' },
-  'Allemand':    { bg:'#1a0e2a', border:'#7744bb', color:'#aa77ee' },
-  'Espagnol':    { bg:'#2a1a0e', border:'#cc6633', color:'#ee8844' },
-  'Français':    { bg:'#0e1a2a', border:'#3377bb', color:'#66aaee' },
-  'Histoire':    { bg:'#2a200e', border:'#cc9933', color:'#ffcc55' },
-  'Géographie':  { bg:'#0e2a2a', border:'#33aaaa', color:'#55dddd' },
-  'Sciences':    { bg:'#1a2a0e', border:'#77aa33', color:'#aadd55' },
-  'Latin':       { bg:'#2a1a08', border:'#cc8833', color:'#ffaa44' },
-  'Maths':       { bg:'#2a0e0e', border:'#cc3333', color:'#ff6666' },
-  'Autre':       { bg:'#1a1a1a', border:'#555555', color:'#aaaaaa' },
+// ── Load active game from sessionStorage ─────────────────────────
+function loadGame() {
+  try {
+    const raw = sessionStorage.getItem('learnGame')
+    if (!raw) return DEFAULT_GAME
+    const game = JSON.parse(raw)
+    // If cells is a flat array (from Firestore), rebuild 2D array
+    if (Array.isArray(game.cells) && game.cells.length > 0 && typeof game.cells[0] === 'object' && 'r' in game.cells[0]) {
+      const nr = game.numRows || game.rows.length
+      const nc = game.numCols || game.cols.length
+      const cells2d = Array.from({ length: nr }, (_, r) =>
+        Array.from({ length: nc }, (_, c) => {
+          const flat = game.cells.find(cell => cell.r === r && cell.c === c)
+          if (!flat) return { prompt: '', answers: { positive:'', negative:'', interrogative:'' } }
+          return {
+            prompt: flat.prompt || '',
+            answers: {
+              positive:      flat.positive      || '',
+              negative:      flat.negative      || '',
+              interrogative: flat.interrogative || '',
+            }
+          }
+        })
+      )
+      return { ...game, cells: cells2d }
+    }
+    return game
+  } catch {}
+  return DEFAULT_GAME
 }
-const ss = s => SUBJECT_STYLE[s] || SUBJECT_STYLE['Autre']
 
-export default function LearnGamesPage() {
+// Fixed form rotation per cell so the deck is always the same
+const FORM_CYCLE = ['positive', 'negative', 'interrogative']
+
+// For the DEFAULT English game: build answers from preterit table
+// For custom games: show the cell content as the "prompt", no complex conjugation
+function buildChallengeCard(game, r, c) {
+  const row     = game.rows[r]
+  const col     = game.cols[c]
+  const rawCell = game.cells[r]?.[c]
+  // rawCell can be a string (old format) or {prompt, answers} object (new format)
+  const prompt  = rawCell && typeof rawCell === 'object' ? (rawCell.prompt || '') : (rawCell || '')
+  const answers = rawCell && typeof rawCell === 'object' ? rawCell.answers : null
+  const form    = FORM_CYCLE[(r * game.cols.length + c) % 3]
+
+  // If the cell already has pre-built answers, use them directly
+  if (answers && answers[form]) {
+    return { row, col, prompt, form, answer: answers[form], formLabel: form }
+  }
+
+  // Default English game — build preterit forms on the fly
+  if (game.isDefault && game.preterit) {
+    const past  = game.preterit[col] || col.toLowerCase()
+    const comp  = prompt.toLowerCase()
+    const pronL = row.toLowerCase()
+    const verbL = col.toLowerCase()
+    const built = {
+      positive:      `${row} ${past} ${comp}.`,
+      negative:      `${row} didn't ${verbL} ${comp}.`,
+      interrogative: `Did ${pronL} ${verbL} ${comp}?`,
+    }
+    return { row, col, prompt, form, answer: built[form], formLabel: form }
+  }
+
+  // Custom game without pre-built answers — teacher validates orally
+  return { row, col, prompt, form: null, answer: null, formLabel: null }
+}
+
+// ── Ship styles ───────────────────────────────────────────────────
+const SHIP_STYLES = {
+  carrier:    { bg:'#0e2a4a', border:'#3377bb', label:'✈', color:'#66aaee' },
+  battleship: { bg:'#20103a', border:'#7744bb', label:'⚔', color:'#aa77ee' },
+  cruiser:    { bg:'#0e3a28', border:'#339966', label:'⛴', color:'#55cc88' },
+  submarine:  { bg:'#0a2e1e', border:'#228855', label:'◈', color:'#44bb77' },
+  destroyer:  { bg:'#3a1a08', border:'#aa5522', label:'⚡', color:'#ee8844' },
+  patrol:     { bg:'#2a1a3a', border:'#884488', label:'🔹', color:'#cc88cc' },
+}
+
+function buildShipMap(ships) {
+  const map = {}
+  ships.forEach(s => s.cells?.forEach(({ r, c }) => { map[`${r},${c}`] = s.id }))
+  return map
+}
+
+// ── Grid — dynamic size, verb/pronoun labels ──────────────────────
+function LearnGrid({ board, game, shipMap = {}, onCellClick, onCellHover, onCellLeave, interactive = false, hideShips = false, theme = null, shipSkin = null }) {
+  const NR = game.rows.length
+  const NC = game.cols.length
+  const W  = typeof window !== 'undefined' ? window.innerWidth  : 900
+  const H  = typeof window !== 'undefined' ? window.innerHeight : 700
+  const labelW = 88
+  const cellW  = Math.max(60, Math.min(110, Math.floor((W - labelW - 80) / NC)))
+  const cellH  = Math.max(48, Math.min(80,  Math.floor((H - 320)         / NR)))
+
+  return (
+    <div style={{ userSelect:'none', overflowX:'auto' }}>
+      {/* Column headers */}
+      <div style={{ display:'flex', marginLeft: labelW + 2 }}>
+        {game.cols.map((v, c) => (
+          <div key={c} style={{ width:cellW, textAlign:'center', fontFamily:'Bebas Neue,sans-serif', fontSize:13, letterSpacing:1, color:'#55cc88', lineHeight:'26px', flexShrink:0 }}>{v}</div>
+        ))}
+      </div>
+      {/* Rows */}
+      {game.rows.map((rowLabel, r) => (
+        <div key={r} style={{ display:'flex', alignItems:'center' }}>
+          <div style={{ width:labelW, textAlign:'right', paddingRight:8, fontFamily:'Bebas Neue,sans-serif', fontSize:12, letterSpacing:1, color:'#66aaee', flexShrink:0, lineHeight:cellH+'px' }}>
+            {rowLabel}
+          </div>
+          <div style={{ display:'flex', gap:2 }}>
+            {game.cols.map((colLabel, c) => {
+              const v      = board?.[r]?.[c]
+              const shipId = !hideShips && shipMap[`${r},${c}`]
+              const st     = shipId ? (SHIP_STYLES[shipId] || SHIP_STYLES.patrol) : null
+              const th = theme || {}
+              const skinSt = (shipSkin && shipId && shipSkin[shipId]) ? shipSkin[shipId] : st
+              let bg=th.cellBg||'#050d1a', bc=th.cellBorder||'#0c1e30', content=null
+              if (skinSt && (v==='ship'||v===null)) { bg=skinSt.bg; bc=skinSt.border }
+              if (v==='preview-valid')   { bg='rgba(0,212,255,.2)'; bc='#00d4ff' }
+              if (v==='preview-invalid') { bg='rgba(255,58,58,.2)'; bc='#ff3a3a' }
+              if (v==='miss')  { bg=th.missBg||'#0a2a4a'; bc=th.cellBorder||'#1a5a8a'; content=<span style={{color:'#4a9abb',fontSize:20,lineHeight:1}}>·</span> }
+              if (v==='hit')   { bg=th.hitBg||'#4a1800'; bc='#cc5500'; content=<span style={{color:'#ff6600',fontSize:15}}>✕</span> }
+              if (v==='sunk')  { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:15}}>✕</span> }
+              const hint = (!v && !st && interactive)
+                ? <span style={{fontSize:8,color:'#1a3a5c',fontFamily:'Share Tech Mono,monospace',textAlign:'center',padding:'0 2px',lineHeight:1.3}}>
+                    {colLabel.substring(0,6)}<br/>{rowLabel.substring(0,6)}
+                  </span>
+                : null
+              return (
+                <div key={c}
+                  onClick={()=>interactive&&onCellClick?.(r,c)}
+                  onMouseEnter={()=>interactive&&onCellHover?.(r,c)}
+                  onMouseLeave={()=>interactive&&onCellLeave?.()}
+                  style={{ width:cellW, height:cellH, background:bg, border:`2px solid ${bc}`, cursor:interactive?'crosshair':'default', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .1s', flexShrink:0 }}
+                >{content||hint}</div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Screens ───────────────────────────────────────────────────────
+const S = { MODE:'mode', AI_DIFF:'ai-diff', SETUP:'setup', PLACEMENT:'placement', CHALLENGE:'challenge', RESULT:'result', BATTLE:'battle', WIN:'win' }
+
+export default function LearnPage() {
   const { user } = useAuth()
   const toast    = useToast()
   const navigate = useNavigate()
 
-  const [myGames,   setMyGames]   = useState(null)
-  const [creating,  setCreating]  = useState(false)
-  const [saving,    setSaving]    = useState(false)
-  const [search,    setSearch]    = useState('')
+  const [game] = useState(loadGame)
+  const NR     = game.rows.length
+  const NC     = game.cols.length
 
-  // Form
-  const [name,          setName]          = useState('')
-  const [subject,       setSubject]       = useState('Anglais')
-  const [forms,         setForms]         = useState(['positive','negative','interrogative'])
-  const [selectedShips, setSelectedShips] = useState(['cruiser','destroyer','patrol'])
-  const [rows,    setRows]    = useState(['', '', '', '', ''])
-  const [cols,    setCols]    = useState(['', '', '', '', '', ''])
-  const [cells,   setCells]   = useState([])
-  const [step,    setStep]    = useState(1) // 1=info, 2=structure, 3=cells
-  const [aiModal,     setAiModal]     = useState(false)
-  const [aiPasted,    setAiPasted]    = useState('')
-  const [aiImageMode, setAiImageMode] = useState(false) // toggle image vs text mode
-  const [aiImage,     setAiImage]     = useState(null)  // base64 image
-  const [aiImagePreview, setAiImagePreview] = useState(null)
-  const [aiLoading,   setAiLoading]   = useState(false)
-  const [aiError,     setAiError]     = useState('')
-
-  useEffect(() => { loadGames() }, [user])
-
-  // Rebuild cells when rows/cols count changes
+  // Load equipped cosmetics
+  const [equippedTheme, setEquippedTheme] = useState('default')
+  const [equippedSkin,  setEquippedSkin]  = useState('default')
   useEffect(() => {
-    setCells(prev =>
-      rows.map((_, r) =>
-        cols.map((_, c) => prev[r]?.[c] ?? '')
-      )
-    )
-  }, [rows.length, cols.length])
-
-  async function loadGames() {
-    if (!user) return
-    try {
-      const q    = query(collection(db,'learn_games'), where('uid','==',user.uid))
-      const snap = await getDocs(q)
-      const games = snap.docs.map(d => ({ id:d.id, ...d.data() }))
-      // Sort client-side by createdAt descending
-      games.sort((a, b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0))
-      setMyGames(games)
-    } catch(e) { console.error('loadGames error:', e); setMyGames([]) }
-  }
-
-  async function deleteGame(id, name) {
-    if (!confirm(`Supprimer "${name}" ?`)) return
-    await deleteDoc(doc(db,'learn_games',id))
-    toast('Jeu supprimé','info')
-    loadGames()
-  }
-
-  function selectGame(game) {
-    sessionStorage.setItem('learnGame', JSON.stringify(game))
-    navigate('/learn')
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────────
-  function setRow(i, v) { setRows(r => { const n=[...r]; n[i]=v; return n }) }
-  function setCol(i, v) { setCols(c => { const n=[...c]; n[i]=v; return n }) }
-  function setCell(r, c, v) {
-    setCells(prev => {
-      const next = prev.map(row => [...row])
-      if (!next[r]) next[r] = []
-      next[r][c] = v
-      return next
-    })
-  }
-
-  function addRow()    { if (rows.length < 10) setRows(r => [...r, '']) }
-  function removeRow() { if (rows.length > 2)  setRows(r => r.slice(0,-1)) }
-  function addCol()    { if (cols.length < 10) setCols(c => [...c, '']) }
-  function removeCol() { if (cols.length > 2)  setCols(c => c.slice(0,-1)) }
-
-  const activeRows = rows.filter(r => r.trim())
-  const activeCols = cols.filter(c => c.trim())
-
-  // Generate a JSON template to give to an AI
-  function generateTemplate() {
-    const activeR = rows.filter(r=>r.trim())
-    const activeC = cols.filter(c=>c.trim())
-    const template = {
-      name: name.trim() || 'Mon jeu',
-      subject: subject,
-      rows: activeR.length ? activeR : ['Ligne 1', 'Ligne 2', 'Ligne 3'],
-      cols: activeC.length ? activeC : ['Colonne 1', 'Colonne 2', 'Colonne 3'],
-      forms: forms,
-      cells: (activeR.length ? activeR : ['Ligne 1','Ligne 2','Ligne 3']).map(r =>
-        (activeC.length ? activeC : ['Colonne 1','Colonne 2','Colonne 3']).map(c => ({
-          prompt:        `[Défi pour ${r} + ${c}]`,
-          positive:      forms.includes('positive')      ? `[Réponse positive pour ${r} + ${c}]`      : '',
-          negative:      forms.includes('negative')      ? `[Réponse négative pour ${r} + ${c}]`      : '',
-          interrogative: forms.includes('interrogative') ? `[Question pour ${r} + ${c}]` : '',
-        }))
-      )
-    }
-    return JSON.stringify(template, null, 2)
-  }
-
-  async function analyzeImage() {
-    if (!aiImage) { toast('Choisissez une image','error'); return }
-    setAiLoading(true)
-    setAiError('')
-    try {
-      const prompt = `Tu es un assistant qui analyse des tableaux de jeu éducatif.
-Regarde cette image d'un tableau (Excel, Numbers ou papier).
-Extrait le contenu et génère un JSON avec ce format EXACT, sans aucun texte avant ou après :
-{
-  "name": "Nom du jeu détecté ou déduit",
-  "subject": "Matière détectée (Anglais/Français/Maths/etc)",
-  "rows": ["ligne1", "ligne2", ...],
-  "cols": ["col1", "col2", ...],
-  "forms": ["positive"],
-  "cells": [
-    [{"prompt":"contenu case","positive":"réponse","negative":"","interrogative":""},...]
-  ]
-}
-Règles :
-- rows = étiquettes des lignes (ex: pronoms I/You/He...)
-- cols = étiquettes des colonnes (ex: verbes Eat/Have...)
-- cells[r][c] correspond à row[r] + col[c]
-- prompt = ce que l'élève voit
-- positive/negative/interrogative = réponses (laisser vide si pas applicable)
-Réponds UNIQUEMENT avec le JSON, rien d'autre.`
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
-          messages: [{
-            role: 'user',
-            content: [
-              { type:'image', source:{ type:'base64', media_type:'image/jpeg', data: aiImage } },
-              { type:'text', text: prompt }
-            ]
-          }]
-        })
-      })
-      const data = await response.json()
-      const text = data.content?.find(b => b.type==='text')?.text || ''
-      // Clean JSON
-      const clean = text.replace(/```json|```/g,'').trim()
-      setAiPasted(clean)
-      toast('Image analysée ! Vérifiez et importez.','success')
-    } catch(e) {
-      setAiError(`Erreur lors de l'analyse : ` + e.message)
-      toast("Erreur analyse",'error')
-    }
-    setAiLoading(false)
-  }
-
-  function handleImageUpload(e) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const result = ev.target.result
-      setAiImagePreview(result)
-      // Extract base64 data only
-      setAiImage(result.split(',')[1])
-    }
-    reader.readAsDataURL(file)
-  }
-
-  function importFromAI() {
-    try {
-      const data = JSON.parse(aiPasted)
-      if (data.name)    setName(data.name)
-      if (data.subject) setSubject(data.subject)
-      if (data.forms)   setForms(data.forms)
-      if (data.rows)    setRows(data.rows.concat(Array(Math.max(0,5-data.rows.length)).fill('')))
-      if (data.cols)    setCols(data.cols.concat(Array(Math.max(0,6-data.cols.length)).fill('')))
-      if (data.cells) {
-        const newCells = data.rows.map((_, r) =>
-          data.cols.map((_, c) => data.cells[r]?.[c] || '')
-        )
-        setCells(newCells)
-        setStep(3)
+    if (!user || user.isAnonymous) return
+    getDoc(doc(db,'users',user.uid)).then(snap => {
+      if (snap.exists()) {
+        const d = snap.data()
+        setEquippedTheme(d.equippedTheme || 'default')
+        setEquippedSkin(d.equippedSkin   || 'default')
       }
-      setAiModal(false)
-      setAiPasted('')
-      toast("Jeu importé depuis l'IA !", 'success')
-    } catch(e) {
-      toast('JSON invalide — vérifiez le format', 'error')
+    }).catch(()=>{})
+  }, [user])
+
+  // Ships config — use game's ship list if defined, else default learn ships
+  const ALL_SHIP_DEFS = {
+    carrier:    { id:'carrier',    name:'Porte-avions', size:5, sunk:false, hits:0 },
+    battleship: { id:'battleship', name:'Cuirassé',     size:4, sunk:false, hits:0 },
+    cruiser:    { id:'cruiser',    name:'Croiseur',     size:3, sunk:false, hits:0 },
+    submarine:  { id:'submarine',  name:'Sous-marin',   size:3, sunk:false, hits:0 },
+    destroyer:  { id:'destroyer',  name:'Destroyer',    size:2, sunk:false, hits:0 },
+    patrol:     { id:'patrol',     name:'Patrouille',   size:2, sunk:false, hits:0 },
+  }
+  const gameShips = (game.ships && game.ships.length > 0)
+    ? game.ships.map(id => ALL_SHIP_DEFS[id]).filter(Boolean)
+    : LEARN_SHIPS_CONFIG
+
+  const [screen,  setScreen]  = useState(S.MODE)
+  const [mode,    setMode]    = useState(null)
+  const [aiDiff,  setAiDiff]  = useState('medium')
+  const [team1,   setTeam1]   = useState('Équipe 1')
+  const [team2,   setTeam2]   = useState('Équipe 2')
+
+  // Placement
+  const [placingTeam, setPlacingTeam] = useState(1)
+  const [placed,      setPlaced]      = useState([])
+  const [shipIdx,     setShipIdx]     = useState(0)
+  const [orientation, setOrientation] = useState('H')
+  const [hoverBoard,  setHoverBoard]  = useState(null)
+
+  // Battle
+  const team1ShipsRef   = useRef([])
+  const team2ShipsRef   = useRef([])
+  const attackBoard1Ref = useRef(null)
+  const attackBoard2Ref = useRef(null)
+
+  const [currentTeam,   setCurrentTeam]   = useState(1)
+  const currentTeamRef = useRef(1) // ref to avoid stale closures in setTimeout
+  const [displayBoard,  setDisplayBoard]  = useState(null)
+  // In vs-ai mode: separate board showing where AI has attacked (our defence)
+  const [myDefenceBoard, setMyDefenceBoard] = useState(null)
+  const [shots,        setShots]        = useState([0, 0])
+  const [battleLog,    setBattleLog]    = useState([])
+
+  // Challenge
+  const [challenge,         setChallenge]         = useState(null)
+  const [challengeRevealed, setChallengeRevealed] = useState(null)
+  const [pendingCell,       setPendingCell]        = useState(null)
+
+  // Result flash
+  const [resultMsg, setResultMsg] = useState(null)
+  const [winner,    setWinner]    = useState(null)
+
+  useEffect(() => {
+    function onKey(e) { if (screen===S.PLACEMENT&&(e.key==='r'||e.key==='R')) setOrientation(o=>o==='H'?'V':'H') }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [screen])
+
+  function addLog(msg, type='') { setBattleLog(l=>[...l.slice(-29),{msg,type,id:Date.now()+Math.random()}]) }
+
+  // ── Modes ─────────────────────────────────────────────────────
+  function selectMode(m) { setMode(m); if(m==='vs-ai') setScreen(S.AI_DIFF); else setScreen(S.SETUP) }
+
+  // ── Placement ─────────────────────────────────────────────────
+  function startPlacement(team) {
+    setPlacingTeam(team); setPlaced([]); setShipIdx(0); setOrientation('H'); setHoverBoard(null)
+    setScreen(S.PLACEMENT)
+  }
+
+  function onHover(r, c) {
+    const ship = gameShips[shipIdx]; if(!ship||placed.find(p=>p.id===ship.id)) return
+    const cells = getShipCells(r,c,ship.size,orientation)
+    const valid = isValidPlacement(cells,placed,NR,NC)
+    const board = createEmptyBoard(NR,NC)
+    placed.forEach(s=>s.cells.forEach(({r:sr,c:sc})=>{board[sr][sc]='ship'}))
+    cells.forEach(({r:cr,c:cc})=>{ if(cr>=0&&cr<NR&&cc>=0&&cc<NC&&board[cr][cc]!=='ship') board[cr][cc]=valid?'preview-valid':'preview-invalid' })
+    setHoverBoard(board)
+  }
+
+  function onClick(r, c) {
+    const ship = gameShips[shipIdx]; if(!ship||placed.find(p=>p.id===ship.id)) return
+    const cells = getShipCells(r,c,ship.size,orientation)
+    if(!isValidPlacement(cells,placed,NR,NC)) { toast('Placement invalide !','error'); return }
+    const next = [...placed,{...ship,cells,sunk:false,hits:0}]; setPlaced(next); setHoverBoard(null)
+    let i=shipIdx+1; while(i<gameShips.length&&next.find(p=>p.id===LEARN_SHIPS_CONFIG[i].id)) i++; setShipIdx(i)
+  }
+
+  const allPlaced = gameShips.every(s=>placed.find(p=>p.id===s.id))
+
+  function confirmPlacement() {
+    if (placingTeam===1) {
+      team1ShipsRef.current = JSON.parse(JSON.stringify(placed))
+      if (mode==='vs-ai') { team2ShipsRef.current=placeShipsRandomly(NR,NC,gameShips); startBattle() }
+      else startPlacement(2)
+    } else {
+      team2ShipsRef.current = JSON.parse(JSON.stringify(placed))
+      startBattle()
     }
   }
 
-  async function saveGame() {
-    if (!name.trim())           { toast('Entrez un nom','error'); return }
-    if (activeRows.length < 2)  { toast('Minimum 2 lignes non vides','error'); return }
-    if (activeCols.length < 2)  { toast('Minimum 2 colonnes non vides','error'); return }
+  function setTeam(t) { currentTeamRef.current = t; setCurrentTeam(t) }
 
-    // Keep only filled rows/cols
-    const rowIdx = rows.map((r,i) => r.trim() ? i : null).filter(i => i !== null)
-    const colIdx = cols.map((c,i) => c.trim() ? i : null).filter(i => i !== null)
-    const trimmedCells = rowIdx.map(r => colIdx.map(c => cells[r]?.[c] || ''))
-
-    // Firestore does not support nested arrays — flatten to 1D with separator
-    // Format: "r,c:prompt|positive|negative|interrogative"
-    const flatCells = trimmedCells.flatMap((row, r) =>
-      row.map((cell, c) => {
-        // cell can be: string, {prompt,positive,negative,interrogative}, or {prompt,answers:{...}}
-        const isObj = cell && typeof cell === 'object'
-        return {
-          r, c,
-          prompt:        isObj ? (cell.prompt || '') : (cell || ''),
-          positive:      isObj ? (cell.positive || cell.answers?.positive || '') : '',
-          negative:      isObj ? (cell.negative || cell.answers?.negative || '') : '',
-          interrogative: isObj ? (cell.interrogative || cell.answers?.interrogative || '') : '',
-        }
-      })
-    )
-
-    setSaving(true)
-    try {
-      await addDoc(collection(db,'learn_games'), {
-        uid: user.uid, name: name.trim(), subject,
-        rows: activeRows, cols: activeCols,
-        cells: flatCells,
-        numRows: activeRows.length,
-        numCols: activeCols.length,
-        forms: forms.length > 0 ? forms : ['positive'],
-        ships: selectedShips,
-        createdAt: serverTimestamp(),
-      })
-      toast(`Jeu "${name}" créé !`,'success')
-      setCreating(false); setStep(1)
-      setName(''); setSubject('Anglais')
-      setForms(['positive','negative','interrogative']); setSelectedShips(['cruiser','destroyer','patrol'])
-      setRows(['','','','','']); setCols(['','','','','','']); setCells([])
-      loadGames()
-    } catch(e) { toast('Erreur: '+e.message,'error') }
-    finally { setSaving(false) }
+  function startBattle() {
+    attackBoard1Ref.current = createEmptyBoard(NR,NC)
+    attackBoard2Ref.current = createEmptyBoard(NR,NC)
+    setTeam(1); setDisplayBoard(createEmptyBoard(NR,NC))
+    setMyDefenceBoard(createEmptyBoard(NR,NC))
+    setShots([0,0]); setBattleLog([]); setScreen(S.BATTLE)
   }
 
-  const allGames = [DEFAULT_GAME, ...(myGames||[])]
-  const filtered = allGames.filter(g =>
-    g.name.toLowerCase().includes(search.toLowerCase()) ||
-    (g.subject||'').toLowerCase().includes(search.toLowerCase())
-  )
+  // ── Attack ─────────────────────────────────────────────────────
+  function onCellClick(r, c) {
+    const board = currentTeam===1 ? attackBoard1Ref.current : attackBoard2Ref.current
+    if (board[r][c]) { toast('Case déjà jouée','error'); return }
+    setPendingCell({r,c})
+    setChallenge(buildChallengeCard(game, r, c))
+    setChallengeRevealed(null)
+    setScreen(S.CHALLENGE)
+  }
 
-  // ── Input style shorthand ─────────────────────────────────────
-  const inp = (extra={}) => ({
-    background:'#050d1a', border:'1px solid #1a3a5c', color:'#c8e6f0',
-    padding:'9px 12px', fontFamily:'Share Tech Mono,monospace', fontSize:12,
-    outline:'none', width:'100%', ...extra,
-  })
+  function resolveChallenge(correct) {
+    const {r,c} = pendingCell
+    setPendingCell(null); setChallenge(null); setChallengeRevealed(null)
+
+    if (!correct) {
+      addLog((currentTeam===1?team1:team2)+': réponse incorrecte — tour perdu','miss')
+      showResult('❌ INCORRECT','#ff3a3a','Tour perdu !',()=>switchTeam()); return
+    }
+
+    const targetShips = currentTeam===1 ? team2ShipsRef.current : team1ShipsRef.current
+    const {result,sunkShip,updatedShips} = processShot(r,c,targetShips)
+    if (currentTeam===1) team2ShipsRef.current=updatedShips; else team1ShipsRef.current=updatedShips
+
+    const board   = currentTeam===1 ? attackBoard1Ref.current : attackBoard2Ref.current
+    const newBoard = board.map(row=>[...row])
+    if (result==='sunk') sunkShip.cells.forEach(sc=>{newBoard[sc.r][sc.c]='sunk'})
+    else newBoard[r][c]=result
+    if (currentTeam===1) attackBoard1Ref.current=newBoard; else attackBoard2Ref.current=newBoard
+    setDisplayBoard(newBoard)
+
+    const label = `${game.rows[r]} + ${game.cols[c]}`
+    const tname = currentTeam===1?team1:team2
+    setShots(s=>{const n=[...s];n[currentTeam-1]++;return n})
+
+    if (result==='sunk')     addLog(tname+': '+label+' — '+sunkShip.name.toUpperCase()+' COULÉ !','sunk')
+    else if(result==='hit')  addLog(tname+': '+label+' — TOUCHÉ !','hit')
+    else                     addLog(tname+': '+label+' — À l\'eau','miss')
+
+    if (allSunk(updatedShips)) { setWinner(currentTeam); setScreen(S.WIN); return }
+
+    if (result==='hit') {
+      showResult('🎯 TOUCHÉ !','#ff6600','REJOUE !',()=>setScreen(S.BATTLE))
+    } else {
+      showResult(result==='sunk'?'💥 COULÉ !':'💧 À L\'EAU', result==='sunk'?'#ff3333':'#4a9abb', 'Tour suivant...', ()=>switchTeam())
+    }
+  }
+
+  function showResult(text,color,sub,cb,duration=2200) {
+    setResultMsg({text,color,sub}); setScreen(S.RESULT)
+    setTimeout(()=>{ setResultMsg(null); cb() }, duration)
+  }
+
+  function switchTeam() {
+    const next = currentTeamRef.current===1 ? 2 : 1
+    setTeam(next)
+    setDisplayBoard(next===1 ? attackBoard1Ref.current : attackBoard2Ref.current)
+    setScreen(S.BATTLE)
+    if (mode==='vs-ai' && next===2) setTimeout(doAiTurn, 800)
+  }
+
+  function doAiTurn() {
+    const board = attackBoard2Ref.current
+    const {cell} = aiPickCell(board,{hitChain:[],huntTargets:[]},aiDiff,NR,NC)
+    if (!cell) { switchTeam(); return }
+    const {result,sunkShip,updatedShips} = processShot(cell.r,cell.c,team1ShipsRef.current)
+    team1ShipsRef.current = updatedShips
+    const newBoard = board.map(row=>[...row])
+    if (result==='sunk') sunkShip.cells.forEach(sc=>{newBoard[sc.r][sc.c]='sunk'})
+    else newBoard[cell.r][cell.c]=result
+    attackBoard2Ref.current=newBoard
+    setMyDefenceBoard(newBoard)
+    setShots(s=>{const n=[...s];n[1]++;return n})
+    if (allSunk(updatedShips)) { setWinner(2); setScreen(S.WIN); return }
+    const resText = result==='sunk'?'💥 IA — COULÉ !':result==='hit'?'🎯 IA — TOUCHÉ !':'💧 IA — À L\'EAU'
+    const resColor = result==='sunk'?'#ff3333':result==='hit'?'#ff6600':'#4a9abb'
+    // Always switch back after one shot — no chaining
+    showResult(resText, resColor, 'À vous de jouer !', ()=>switchTeam(), 1000)
+  }
+
+  function buildPlacementBoard() {
+    const board=createEmptyBoard(NR,NC)
+    placed.forEach(s=>s.cells.forEach(({r,c})=>{board[r][c]='ship'}))
+    if(hoverBoard) for(let r=0;r<NR;r++) for(let c=0;c<NC;c++) if((hoverBoard[r][c]==='preview-valid'||hoverBoard[r][c]==='preview-invalid')&&board[r][c]!=='ship') board[r][c]=hoverBoard[r][c]
+    return board
+  }
+
+  function resetGame() { setScreen(S.MODE); setMode(null); setPlaced([]); setChallenge(null); setChallengeRevealed(null); setPendingCell(null); setWinner(null) }
 
   // ══════════════════════════════════════════════════════════════
-  // CREATION FORM
+  // RENDER
   // ══════════════════════════════════════════════════════════════
-  if (creating) return (
-    <div style={{ padding:'32px 40px', maxWidth:1100, margin:'0 auto', position:'relative', zIndex:1 }}>
 
-      {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:28, flexWrap:'wrap' }}>
-        <button className="btn sm" onClick={() => { setCreating(false); setStep(1) }}>⬅ RETOUR</button>
-        <div style={{ fontFamily:'Bebas Neue,sans-serif', fontSize:26, letterSpacing:5, color:'#00d4ff' }}>CRÉER UN JEU</div>
-        {/* Steps */}
-        <div style={{ marginLeft:'auto', display:'flex', gap:8 }}>
-          {['INFOS','STRUCTURE','CONTENU'].map((s,i) => (
-            <div key={i} onClick={() => step > i+1 && setStep(i+1)}
-              style={{ padding:'4px 14px', fontFamily:'Share Tech Mono,monospace', fontSize:10, letterSpacing:1,
-                border:`1px solid ${step===i+1?'#00d4ff':'#1a3a5c'}`,
-                background: step===i+1?'rgba(0,212,255,.1)':'transparent',
-                color: step===i+1?'#00d4ff':'#4a7090',
-                cursor: step>i+1?'pointer':'default' }}>
-              {i+1}. {s}
-            </div>
-          ))}
+  if (screen===S.MODE) return (
+    <div style={{padding:'40px',maxWidth:800,margin:'0 auto',position:'relative',zIndex:1}}>
+      <button className="btn sm ghost" style={{marginBottom:16}} onClick={()=>navigate('/learn-games')}>⬅ CHANGER DE JEU</button>
+      <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:28,letterSpacing:5,color:'#00d4ff',marginBottom:4}}>📚 {game.name.toUpperCase()}</div>
+      <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:8,letterSpacing:1}}>
+        GRILLE {NR}×{NC} — {NR*NC} CASES
+      </div>
+      <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#ffd700',marginBottom:28,padding:'10px 14px',border:'1px solid rgba(255,215,0,.2)',background:'rgba(255,215,0,.05)',lineHeight:1.6}}>
+        ℹ Avant chaque tir, l'élève dit la phrase à voix haute. Le prof valide avant que le tir parte.
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,maxWidth:560}}>
+        <div className="card hover-glow fade-up" style={{padding:28,cursor:'pointer'}} onClick={()=>selectMode('local')}>
+          <div style={{fontSize:38,marginBottom:12}}>👥</div>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:3,color:'#00d4ff',marginBottom:8}}>2 ÉQUIPES</div>
+          <div style={{fontSize:12,color:'#4a7090',lineHeight:1.6}}>Équipe 1 vs Équipe 2. Écran projeté pour toute la classe.</div>
+          <span className="tag" style={{marginTop:12,display:'inline-block'}}>CLASSE</span>
+        </div>
+        <div className="card hover-glow fade-up" style={{padding:28,cursor:'pointer',animationDelay:'.07s'}} onClick={()=>selectMode('vs-ai')}>
+          <div style={{fontSize:38,marginBottom:12}}>🤖</div>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:3,color:'#00d4ff',marginBottom:8}}>VS IA</div>
+          <div style={{fontSize:12,color:'#4a7090',lineHeight:1.6}}>La classe joue contre le robot.</div>
+          <span className="tag" style={{marginTop:12,display:'inline-block'}}>SOLO CLASSE</span>
         </div>
       </div>
+    </div>
+  )
 
-      {/* STEP 1 — Infos */}
-      {step === 1 && (
-        <div className="fade-up" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, maxWidth:900 }}>
-
-          {/* Left — Général */}
-          <div className="card glow" style={{ padding:28, position:'relative' }}>
-            <div style={{ position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#00d4ff,transparent)' }}/>
-            <div style={{ fontFamily:'Bebas Neue,sans-serif',fontSize:18,letterSpacing:3,color:'#00d4ff',marginBottom:20 }}>INFORMATIONS</div>
-
-            <div className="field">
-              <label>Nom du jeu</label>
-              <input value={name} onChange={e=>setName(e.target.value)} placeholder="ex: Allemand — Verbes" maxLength={60} autoFocus style={inp()} />
-            </div>
-
-            <div className="field">
-              <label>Matière</label>
-              <select value={subject} onChange={e=>setSubject(e.target.value)} style={inp()}>
-                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
-            <div className="field" style={{marginBottom:0}}>
-              <label>Formes à utiliser</label>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:4 }}>
-                {[
-                  { key:'positive',      label:'➕ Positif',      color:'#00ff88' },
-                  { key:'negative',      label:'➖ Négatif',      color:'#ff6666' },
-                  { key:'interrogative', label:'❓ Interrogatif', color:'#ffd700' },
-                ].map(({key,label,color}) => {
-                  const on = forms.includes(key)
-                  return (
-                    <div key={key} onClick={()=>setForms(f=>on?f.filter(x=>x!==key):[...f,key])}
-                      style={{ padding:'7px 12px', border:`1px solid ${on?color:'#1a3a5c'}`, background:on?`${color}15`:'transparent',
-                        color:on?color:'#4a7090', cursor:'pointer', fontFamily:'Share Tech Mono,monospace', fontSize:11,
-                        transition:'all .15s' }}>
-                      {label}
-                    </div>
-                  )
-                })}
-              </div>
-              <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090',marginTop:6 }}>
-                Détermine les formes que l'élève devra dire à voix haute.
-              </div>
-            </div>
+  if (screen===S.AI_DIFF) return (
+    <div style={{padding:'40px',maxWidth:700,margin:'0 auto',position:'relative',zIndex:1}}>
+      <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:28,letterSpacing:5,color:'#00d4ff',marginBottom:24}}>DIFFICULTÉ IA</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
+        {[{id:'easy',icon:'🟢',name:'Facile',desc:'Tirs aléatoires.'},{id:'medium',icon:'🟡',name:'Moyen',desc:'Suit ses touches.'},{id:'hard',icon:'🔴',name:'Difficile',desc:'Optimal.'}].map(d=>(
+          <div key={d.id} className="card hover-glow" style={{padding:24,cursor:'pointer'}} onClick={()=>{setAiDiff(d.id);setScreen(S.SETUP)}}>
+            <div style={{fontSize:32,marginBottom:10}}>{d.icon}</div>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:18,letterSpacing:3,color:'#00d4ff',marginBottom:6}}>{d.name}</div>
+            <div style={{fontSize:12,color:'#4a7090'}}>{d.desc}</div>
           </div>
+        ))}
+      </div>
+    </div>
+  )
 
-          {/* Right — Ships */}
-          <div className="card" style={{ padding:28 }}>
-            <div style={{ fontFamily:'Bebas Neue,sans-serif',fontSize:18,letterSpacing:3,color:'#00d4ff',marginBottom:8 }}>BATEAUX</div>
-            <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:16 }}>
-              CHOISISSEZ LES BATEAUX UTILISÉS EN JEU
-            </div>
-            {ALL_SHIPS.map(ship => {
-              const on = selectedShips.includes(ship.id)
+  if (screen===S.SETUP) return (
+    <div style={{padding:'40px',maxWidth:520,margin:'0 auto',position:'relative',zIndex:1}}>
+      <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:26,letterSpacing:5,color:'#00d4ff',marginBottom:24}}>NOM DES ÉQUIPES</div>
+      <div className="card glow" style={{padding:32,position:'relative'}}>
+        <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#00d4ff,transparent)'}}/>
+        <div className="field">
+          <label>Équipe 1</label>
+          <input value={team1} onChange={e=>setTeam1(e.target.value)} placeholder="ex: Les Requins" maxLength={24} autoFocus />
+        </div>
+        {mode==='local'
+          ? <div className="field"><label>Équipe 2</label><input value={team2} onChange={e=>setTeam2(e.target.value)} placeholder="ex: Les Dauphins" maxLength={24}/></div>
+          : <div className="field"><label>Équipe 2</label><input value="IA 🤖" disabled style={{opacity:.5}}/></div>
+        }
+        <button className="btn primary full" style={{marginTop:8}} onClick={()=>startPlacement(1)}>
+          ▶ PLACER LES BATEAUX — {team1.toUpperCase()}
+        </button>
+      </div>
+    </div>
+  )
+
+  if (screen===S.PLACEMENT) {
+    const dispBoard = buildPlacementBoard()
+    const shipMap   = buildShipMap(placed)
+    const curShip   = gameShips[shipIdx]
+    return (
+      <div style={{padding:'20px 24px',maxWidth:1200,margin:'0 auto',position:'relative',zIndex:1}}>
+        {/* Header */}
+        <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:16,flexWrap:'wrap'}}>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:'#00d4ff'}}>
+            PLACEMENT — {placingTeam===1?team1.toUpperCase():team2.toUpperCase()}
+          </div>
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090'}}>CLIQUEZ · [R] PIVOTER</div>
+        </div>
+
+        {/* Main layout — palette LEFT, grid RIGHT, always side by side */}
+        <div style={{display:'grid',gridTemplateColumns:'180px 1fr',gap:16,alignItems:'start'}}>
+
+          {/* LEFT — Ship palette */}
+          <div className="card" style={{padding:14}}>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:13,letterSpacing:3,color:'#00d4ff',marginBottom:10,paddingBottom:8,borderBottom:'1px solid #1a3a5c'}}>FLOTTE</div>
+            {gameShips.map((s,i)=>{
+              const p=!!placed.find(p=>p.id===s.id),a=i===shipIdx&&!p,st=SHIP_STYLES[s.id]||SHIP_STYLES.patrol
               return (
-                <div key={ship.id} onClick={()=>setSelectedShips(s=>on?s.filter(x=>x!==ship.id):[...s,ship.id])}
-                  style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', marginBottom:6,
-                    border:`1px solid ${on?ship.color:'#1a2a3a'}`,
-                    background:on?`${ship.color}10`:'transparent',
-                    cursor:'pointer', transition:'all .15s' }}>
-                  <span style={{ fontSize:16, color:ship.color }}>{ship.label}</span>
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontSize:12, color:on?ship.color:'#4a7090' }}>{ship.name}</div>
-                    <div style={{ display:'flex', gap:2, marginTop:3 }}>
-                      {Array(ship.size).fill(0).map((_,j)=>(
-                        <div key={j} style={{ width:10,height:10,background:on?ship.color:'#1a3a5c',transition:'background .15s' }}/>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:on?ship.color:'#4a7090' }}>
-                    {ship.size} cases
+                <div key={s.id} onClick={()=>!p&&setShipIdx(i)}
+                  style={{display:'flex',alignItems:'center',gap:8,padding:'7px 8px',marginBottom:4,border:a?`1px solid ${st.border}`:'1px solid transparent',background:a?st.bg:'transparent',opacity:p?.35:1,cursor:p?'not-allowed':'pointer',transition:'all .15s',borderRadius:2}}>
+                  <div style={{display:'flex',gap:2,flexShrink:0}}>{Array(s.size).fill(0).map((_,j)=><div key={j} style={{width:11,height:11,background:st.bg,border:`1px solid ${st.border}`}}/>)}</div>
+                  <div style={{minWidth:0}}>
+                    <div style={{fontSize:11,color:p?'#4a7090':st.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{st.label} {s.name}</div>
+                    <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090'}}>{s.size} cases{p?' ✓':''}</div>
                   </div>
                 </div>
               )
             })}
-            {selectedShips.length === 0 && (
-              <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ff3a3a',marginTop:8 }}>
-                ⚠ Sélectionnez au moins 1 bateau
+            <div style={{borderTop:'1px solid #1a3a5c',marginTop:8,paddingTop:8,display:'flex',flexDirection:'column',gap:5}}>
+              <button className="btn sm" style={{fontSize:10,padding:'4px 8px'}} onClick={()=>setOrientation(o=>o==='H'?'V':'H')}>↻ {orientation==='H'?'H':'V'}</button>
+              <button className="btn sm" style={{fontSize:10,padding:'4px 8px'}} onClick={()=>{setPlaced(placeShipsRandomly(NR,NC,gameShips));setShipIdx(gameShips.length);setHoverBoard(null)}}>🎲 AUTO</button>
+              <button className="btn sm danger" style={{fontSize:10,padding:'4px 8px'}} onClick={()=>{setPlaced([]);setShipIdx(0);setHoverBoard(null)}}>✕</button>
+            </div>
+            <button className="btn primary full" style={{marginTop:8,fontSize:12,padding:'8px'}} disabled={!allPlaced} onClick={confirmPlacement}>✔ OK</button>
+          </div>
+
+          {/* RIGHT — Grid */}
+          <div>
+            {curShip&&!allPlaced&&(
+              <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:(SHIP_STYLES[curShip.id]||SHIP_STYLES.patrol).color,marginBottom:8,letterSpacing:1}}>
+                ► {curShip.name.toUpperCase()} — {curShip.size} cases — {orientation==='H'?'HORIZONTAL':'VERTICAL'}
               </div>
             )}
-          </div>
-
-          <div style={{ gridColumn:'1/-1' }}>
-            <button className="btn primary" onClick={()=>setStep(2)} disabled={!name.trim()||selectedShips.length===0}>
-              SUIVANT — DÉFINIR LA GRILLE →
-            </button>
+            <LearnGrid board={dispBoard} game={game} shipMap={shipMap} onCellClick={onClick} onCellHover={onHover} onCellLeave={()=>setHoverBoard(null)} interactive={!allPlaced} theme={SEA_THEMES[equippedTheme]||SEA_THEMES.default} shipSkin={SHIP_SKINS[equippedSkin]||SHIP_SKINS.default}/>
           </div>
         </div>
-      )}
+      </div>
+    )
+  }
 
-      {/* STEP 2 — Structure */}
-      {step === 2 && (
-        <div className="fade-up">
-          <div className="card" style={{ padding:28, marginBottom:20 }}>
-            <div style={{ fontFamily:'Bebas Neue,sans-serif',fontSize:18,letterSpacing:3,color:'#00d4ff',marginBottom:6 }}>STRUCTURE DE LA GRILLE</div>
-            <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:24 }}>
-              Définissez les étiquettes des lignes (ex: pronoms) et des colonnes (ex: verbes). Taille libre jusqu'à 10×10.
+  if (screen===S.BATTLE) {
+    const tname = currentTeam===1?team1:(mode==='vs-ai'?'Classe':team2)
+    const ename = currentTeam===1?(mode==='vs-ai'?'IA':team2):team1
+    const isVsAI = mode==='vs-ai'
+    return (
+      <div style={{padding:'20px 32px',maxWidth:1100,margin:'0 auto',position:'relative',zIndex:1}}>
+        {/* Status */}
+        <div className="card" style={{padding:'14px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
+          <span className="dot gold"/>
+          <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:'#ffd700'}}>
+            ⚔ {tname.toUpperCase()} — CLIQUE ET DIS LA PHRASE !
+          </span>
+          <div style={{marginLeft:'auto',display:'flex',gap:16}}>
+            <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{team1}: {shots[0]} tir{shots[0]!==1?'s':''}</span>
+            <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{isVsAI?'IA':team2}: {shots[1]} tir{shots[1]!==1?'s':''}</span>
+          </div>
+        </div>
+
+        {/* 2 boards in vs-ai, 1 board in local */}
+        <div style={{display:'grid',gridTemplateColumns:isVsAI?'1fr 1fr':'1fr',gap:16,marginBottom:16}}>
+          {/* Attack board — always shown */}
+          <div className="card" style={{padding:20}}>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:3,color:'#ff3a3a',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
+              <span className="dot red"/>MER ENNEMIE — {ename.toUpperCase()}
             </div>
-
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:32 }}>
-              {/* Lignes */}
-              <div>
-                <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#66aaee',letterSpacing:2,marginBottom:12 }}>
-                  LIGNES ({rows.length})
-                </div>
-                {rows.map((r,i) => (
-                  <input key={i} value={r} onChange={e=>setRow(i,e.target.value)} placeholder={`Ligne ${i+1}`}
-                    style={{ ...inp(), marginBottom:6 }} />
-                ))}
-                <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                  <button className="btn sm" onClick={addRow} disabled={rows.length>=10}>+ LIGNE</button>
-                  <button className="btn sm danger" onClick={removeRow} disabled={rows.length<=2}>− LIGNE</button>
-                </div>
-              </div>
-
-              {/* Colonnes */}
-              <div>
-                <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#55cc88',letterSpacing:2,marginBottom:12 }}>
-                  COLONNES ({cols.length})
-                </div>
-                {cols.map((c,i) => (
-                  <input key={i} value={c} onChange={e=>setCol(i,e.target.value)} placeholder={`Colonne ${i+1}`}
-                    style={{ ...inp(), marginBottom:6 }} />
-                ))}
-                <div style={{ display:'flex', gap:8, marginTop:8 }}>
-                  <button className="btn sm" onClick={addCol} disabled={cols.length>=10}>+ COLONNE</button>
-                  <button className="btn sm danger" onClick={removeCol} disabled={cols.length<=2}>− COLONNE</button>
-                </div>
-              </div>
-            </div>
+            <LearnGrid board={displayBoard} game={game} onCellClick={onCellClick} interactive={true} hideShips={true} theme={SEA_THEMES[equippedTheme]||SEA_THEMES.default}/>
           </div>
 
-          {/* Preview mini */}
-          {activeRows.length >= 2 && activeCols.length >= 2 && (
-            <div className="card" style={{ padding:16, marginBottom:20, overflow:'auto' }}>
-              <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:10,letterSpacing:1 }}>APERÇU DE LA GRILLE</div>
-              <table style={{ borderCollapse:'collapse', fontSize:11, fontFamily:'Share Tech Mono,monospace' }}>
-                <thead>
-                  <tr>
-                    <th style={{ padding:'6px 10px', color:'#4a7090', borderBottom:'1px solid #1a3a5c', textAlign:'center' }}>×</th>
-                    {cols.filter(c=>c.trim()).map((c,i) => (
-                      <th key={i} style={{ padding:'6px 10px', color:'#55cc88', borderBottom:'1px solid #1a3a5c', textAlign:'center', minWidth:80 }}>{c}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.filter(r=>r.trim()).map((r,i) => (
-                    <tr key={i}>
-                      <td style={{ padding:'6px 10px', color:'#66aaee', borderRight:'1px solid #1a3a5c', whiteSpace:'nowrap' }}>{r}</td>
-                      {cols.filter(c=>c.trim()).map((_,j) => (
-                        <td key={j} style={{ padding:'6px 10px', border:'1px solid #0d1e30', color:'#2a4a5a', textAlign:'center' }}>—</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Defence board — only in vs-ai mode */}
+          {isVsAI && (
+            <div className="card" style={{padding:20}}>
+              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:3,color:'#00d4ff',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
+                <span className="dot green"/>MA FLOTTE — CLASSE
+              </div>
+              <LearnGrid board={myDefenceBoard} game={game} shipMap={buildShipMap(team1ShipsRef.current)} hideShips={false} theme={SEA_THEMES[equippedTheme]||SEA_THEMES.default} shipSkin={SHIP_SKINS[equippedSkin]||SHIP_SKINS.default}/>
             </div>
           )}
-
-          <div style={{ display:'flex', gap:12 }}>
-            <button className="btn" onClick={()=>setStep(1)}>⬅ RETOUR</button>
-            <button className="btn primary" onClick={()=>setStep(3)} disabled={activeRows.length<2||activeCols.length<2}>
-              SUIVANT — REMPLIR LES CASES →
-            </button>
-          </div>
         </div>
-      )}
+      </div>
+    )
+  }
 
-      {/* STEP 3 — Cells */}
-      {step === 3 && (
-        <div className="fade-up">
-          <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:4,letterSpacing:1 }}>
-            REMPLISSEZ CHAQUE CASE — "Défi" = ce que voit l'élève · Les réponses = ce que le prof voit après validation.
-          </div>
-          <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
-            {forms.includes('positive')      && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#00ff88',border:'1px solid rgba(0,255,136,.3)',padding:'2px 8px' }}>➕ Positif activé</span>}
-            {forms.includes('negative')      && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ff6666',border:'1px solid rgba(255,102,102,.3)',padding:'2px 8px' }}>➖ Négatif activé</span>}
-            {forms.includes('interrogative') && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ffd700',border:'1px solid rgba(255,215,0,.3)',padding:'2px 8px' }}>❓ Interrogatif activé</span>}
-            <button className="btn sm" onClick={() => setAiModal(true)}
-              style={{ marginLeft:'auto', borderColor:'#aa44ff', color:'#aa44ff', background:'rgba(170,68,255,.08)' }}>
-              🤖 REMPLIR AVEC UNE IA
-            </button>
-          </div>
+  if (screen===S.CHALLENGE && challenge) {
+    const { row, col, prompt, form, answer, formLabel } = challenge
+    const tname = currentTeam===1?team1:team2
+    const isLatin = game.subject === 'Latin'
+    const formColor = isLatin
+      ? (form==='positive'?'#00d4ff':form==='negative'?'#aa44ff':'#ffd700')
+      : (form==='positive'?'#00ff88':form==='negative'?'#ff6666':form?'#ffd700':'#00d4ff')
 
-          <div style={{ overflowX:'auto', marginBottom:20 }}>
-            <table style={{ borderCollapse:'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={{ padding:'8px 14px',fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',borderBottom:'1px solid #1a3a5c',textAlign:'left',whiteSpace:'nowrap' }}>↓ / →</th>
-                  {cols.filter(c=>c.trim()).map((c,ci) => (
-                    <th key={ci} style={{ padding:'8px 14px',fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:2,color:'#55cc88',borderBottom:'1px solid #1a3a5c',textAlign:'center',minWidth:180 }}>{c}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.filter(r=>r.trim()).map((r, ri) => (
-                  <tr key={ri}>
-                    <td style={{ padding:'8px 14px',fontFamily:'Bebas Neue,sans-serif',fontSize:14,letterSpacing:2,color:'#66aaee',borderRight:'1px solid #1a3a5c',whiteSpace:'nowrap',verticalAlign:'top' }}>{r}</td>
-                    {cols.filter(c=>c.trim()).map((c, ci) => {
-                      const cell = cells[ri]?.[ci] || {}
-                      const prompt   = typeof cell === 'string' ? cell : (cell.prompt || '')
-                      const positive = typeof cell === 'object' ? (cell.positive || '') : ''
-                      const negative = typeof cell === 'object' ? (cell.negative || '') : ''
-                      const interrogative = typeof cell === 'object' ? (cell.interrogative || '') : ''
-                      return (
-                        <td key={ci} style={{ padding:5, border:'1px solid #0d1e30', verticalAlign:'top' }}>
-                          <div style={{ background:'#080f1c', padding:8 }}>
-                            {/* Prompt — always */}
-                            <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090',marginBottom:3 }}>DÉFI (affiché à l'élève)</div>
-                            <input value={prompt} onChange={e=>setCell(ri,ci,{...cell,prompt:e.target.value})}
-                              placeholder={`${r} + ${c}…`}
-                              style={{ ...inp({padding:'5px 8px',fontSize:11,marginBottom:4}) }}/>
-                            {/* Positive */}
-                            {forms.includes('positive') && <>
-                              <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#00ff88',marginBottom:2 }}>➕ Positif</div>
-                              <input value={positive} onChange={e=>setCell(ri,ci,{...cell,positive:e.target.value})}
-                                placeholder="Ex: I ate a brownie."
-                                style={{ ...inp({padding:'5px 8px',fontSize:11,marginBottom:4}) }}/>
-                            </>}
-                            {/* Negative */}
-                            {forms.includes('negative') && <>
-                              <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#ff6666',marginBottom:2 }}>➖ Négatif</div>
-                              <input value={negative} onChange={e=>setCell(ri,ci,{...cell,negative:e.target.value})}
-                                placeholder="Ex: I didn't eat a brownie."
-                                style={{ ...inp({padding:'5px 8px',fontSize:11,marginBottom:4}) }}/>
-                            </>}
-                            {/* Interrogative */}
-                            {forms.includes('interrogative') && <>
-                              <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#ffd700',marginBottom:2 }}>❓ Interrogatif</div>
-                              <input value={interrogative} onChange={e=>setCell(ri,ci,{...cell,interrogative:e.target.value})}
-                                placeholder="Ex: Did I eat a brownie?"
-                                style={{ ...inp({padding:'5px 8px',fontSize:11,marginBottom:0}) }}/>
-                            </>}
-                          </div>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+    return (
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'calc(100vh - 60px)',position:'relative',zIndex:1,padding:20}}>
+        <div className="fade-up" style={{maxWidth:620,width:'100%',textAlign:'center'}}>
+          <div className="card glow" style={{padding:'44px 40px',position:'relative'}}>
+            <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${formColor},transparent)`}}/>
 
-          <div style={{ display:'flex', gap:12 }}>
-            <button className="btn" onClick={()=>setStep(2)}>⬅ RETOUR</button>
-            <button className="btn primary" onClick={saveGame} disabled={saving}>
-              {saving ? <><span className="spinner"/> SAUVEGARDE...</> : '💾 SAUVEGARDER LE JEU'}
-            </button>
-          </div>
-        </div>
-      )}
+            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:12,color:'#4a7090',marginBottom:8,letterSpacing:2}}>{tname.toUpperCase()} — DÉFI ORAL</div>
 
-
-      {/* ── AI Template Modal ──────────────────────────────────────── */}
-      {aiModal && (
-        <div onClick={e=>e.target===e.currentTarget&&setAiModal(false)}
-          style={{position:'fixed',inset:0,background:'rgba(5,13,26,.95)',zIndex:1000,display:'flex',alignItems:'flex-start',justifyContent:'center',padding:20,overflowY:'auto'}}>
-          <div className="card glow fade-up" style={{width:'100%',maxWidth:700,padding:36,position:'relative',marginTop:40}}>
-            <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#aa44ff,transparent)'}}/>
-            <button onClick={()=>setAiModal(false)} style={{position:'absolute',top:14,right:18,background:'none',border:'none',color:'#4a7090',fontSize:18,cursor:'pointer'}}>✕</button>
-            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:3,color:'#aa44ff',marginBottom:16}}>🤖 REMPLIR AVEC UNE IA</div>
-
-            {/* Mode tabs */}
-            <div style={{display:'flex',gap:8,marginBottom:20}}>
-              {[
-                [false,'📋 TEMPLATE TEXTE','Copie un template à donner à une IA'],
-                [true, '📸 IMAGE EXCEL','Envoie une photo de ton tableau'],
-              ].map(([isImg,label,desc])=>(
-                <div key={label} onClick={()=>setAiImageMode(isImg)}
-                  style={{flex:1,padding:'10px 14px',border:`2px solid ${aiImageMode===isImg?'#aa44ff':'#1a3a5c'}`,background:aiImageMode===isImg?'rgba(170,68,255,.12)':'transparent',cursor:'pointer',textAlign:'center'}}>
-                  <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:14,letterSpacing:2,color:aiImageMode===isImg?'#aa44ff':'#4a7090'}}>{label}</div>
-                  <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090',marginTop:3}}>{desc}</div>
-                </div>
-              ))}
+            {/* Form label — only for games with forms */}
+            {formLabel && (
+              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:formColor,marginBottom:4}}>
+                {isLatin
+                  ? (form==='positive'?'🔵 SINGULIER':form==='negative'?'🟣 PLURIEL':'❓ FORME INTERROGATIVE')
+                  : (form==='positive'?'➕ FORME AFFIRMATIVE':form==='negative'?'➖ FORME NÉGATIVE':'❓ FORME INTERROGATIVE')}
+              </div>
+            )}
+            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:13,color:'#4a7090',marginBottom:30,letterSpacing:2}}>
+              {isLatin
+                ? (formLabel ? 'DIS LA FORME DEMANDÉE' : 'DIS LA PHRASE À VOIX HAUTE')
+                : (formLabel ? 'DIS LA PHRASE AU PASSÉ' : 'DIS LA PHRASE À VOIX HAUTE')}
             </div>
 
-            {/* TEXT MODE */}
-            {!aiImageMode && (<>
-              <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:12,lineHeight:1.7}}>
-                1. Copiez le template → 2. Donnez à Claude/ChatGPT avec votre sujet → 3. Collez la réponse
+            {/* Row + Col + Cell */}
+            <div style={{display:'flex',gap:10,justifyContent:'center',alignItems:'center',flexWrap:'wrap',marginBottom:32}}>
+              <div style={{padding:'12px 20px',background:'#0e1e2e',border:'1px solid #2a4a6a',fontFamily:'Bebas Neue,sans-serif',fontSize:26,letterSpacing:3,color:'#66aaee'}}>{row}</div>
+              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:24,color:'#4a7090'}}>+</div>
+              <div style={{padding:'12px 20px',background:'#0e2a1a',border:'1px solid #339966',fontFamily:'Bebas Neue,sans-serif',fontSize:26,letterSpacing:3,color:'#55cc88'}}>{col}</div>
+              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:24,color:'#4a7090'}}>+</div>
+              <div style={{padding:'12px 20px',background:'#1a1a0e',border:'1px solid #555522',fontFamily:'Share Tech Mono,monospace',fontSize:16,color:'#bbbb55',lineHeight:1.5,maxWidth:200,textAlign:'center'}}>{prompt}</div>
+            </div>
+
+            {/* Teacher answer — revealed only after validation */}
+            {challengeRevealed && answer && (
+              <div style={{background:challengeRevealed==='correct'?'rgba(0,255,136,.08)':'rgba(255,58,58,.08)',border:`1px solid ${challengeRevealed==='correct'?'rgba(0,255,136,.3)':'rgba(255,58,58,.3)'}`,padding:'14px 20px',marginBottom:24,animation:'fadeUp .25s ease'}}>
+                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',letterSpacing:2,marginBottom:6}}>BONNE RÉPONSE</div>
+                <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:2,color:challengeRevealed==='correct'?'#00ff88':'#ff6666'}}>{answer}</div>
               </div>
-              <div style={{marginBottom:14}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-                  <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#aa44ff',letterSpacing:1}}>TEMPLATE</div>
-                  <button onClick={()=>{navigator.clipboard.writeText(generateTemplate());toast('Copié !','success')}}
-                    style={{padding:'4px 12px',background:'rgba(170,68,255,.15)',border:'1px solid #aa44ff',color:'#aa44ff',fontFamily:'Share Tech Mono,monospace',fontSize:10,cursor:'pointer'}}>
-                    📋 COPIER
+            )}
+            {challengeRevealed && !answer && <div style={{height:4,marginBottom:24}}/>}
+            {!challengeRevealed && <div style={{height:4,marginBottom:24}}/>}
+
+            {/* Buttons */}
+            {!challengeRevealed ? (
+              <div>
+                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:14}}>ÉCOUTEZ L'ÉLÈVE, PUIS VALIDEZ :</div>
+                <div style={{display:'flex',gap:16,justifyContent:'center'}}>
+                  <button className="btn lg" onClick={()=>setChallengeRevealed('incorrect')}
+                    style={{borderColor:'#ff3a3a',color:'#ff3a3a',flex:1,maxWidth:220}}
+                    onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,58,58,.1)'}}
+                    onMouseLeave={e=>{e.currentTarget.style.background='transparent'}}>
+                    ✕ INCORRECT
+                  </button>
+                  <button className="btn lg" onClick={()=>setChallengeRevealed('correct')}
+                    style={{borderColor:'#00ff88',color:'#00ff88',flex:1,maxWidth:220}}
+                    onMouseEnter={e=>{e.currentTarget.style.background='rgba(0,255,136,.1)'}}
+                    onMouseLeave={e=>{e.currentTarget.style.background='transparent'}}>
+                    ✓ CORRECT
                   </button>
                 </div>
-                <pre style={{background:'#030810',border:'1px solid #1a3a5c',padding:10,fontSize:9,fontFamily:'Share Tech Mono,monospace',color:'#4a7090',overflowX:'auto',maxHeight:160,overflowY:'auto',lineHeight:1.5}}>
-                  {generateTemplate()}
-                </pre>
               </div>
-            </>)}
-
-            {/* IMAGE MODE */}
-            {aiImageMode && (<>
-              <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:12,lineHeight:1.7}}>
-                Fais une capture de ton tableau Excel/Numbers → l'IA lit l'image et remplit automatiquement le jeu.
-              </div>
-
-              {/* Upload zone */}
-              <label style={{display:'block',marginBottom:14,cursor:'pointer'}}>
-                <div style={{border:`2px dashed ${aiImagePreview?'#aa44ff':'#1a3a5c'}`,background:aiImagePreview?'rgba(170,68,255,.05)':'#030810',padding:aiImagePreview?8:24,textAlign:'center',transition:'all .2s'}}>
-                  {aiImagePreview
-                    ? <img src={aiImagePreview} style={{maxWidth:'100%',maxHeight:200,objectFit:'contain'}} alt="preview"/>
-                    : <>
-                        <div style={{fontSize:32,marginBottom:8}}>📸</div>
-                        <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:16,letterSpacing:2,color:'#aa44ff'}}>CLIQUEZ POUR IMPORTER</div>
-                        <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginTop:4}}>PNG, JPG, JPEG</div>
-                      </>
-                  }
-                </div>
-                <input type="file" accept="image/*" onChange={handleImageUpload} style={{display:'none'}}/>
-              </label>
-
-              {aiImagePreview && (
-                <button className="btn primary full" onClick={analyzeImage} disabled={aiLoading}
-                  style={{borderColor:'#aa44ff',color:'#aa44ff',marginBottom:14}}>
-                  {aiLoading ? '⏳ ANALYSE EN COURS...' : "🔍 ANALYSER L'IMAGE AVEC L'IA"}
-                </button>
-              )}
-
-              {aiError && <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ff3a3a',marginBottom:12,padding:'8px 12px',border:'1px solid rgba(255,58,58,.3)'}}>{aiError}</div>}
-            </>)}
-
-            {/* JSON result / paste area — shown in both modes */}
-            <div style={{marginBottom:14}}>
-              <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#00d4ff',letterSpacing:1,marginBottom:6}}>
-                {aiImageMode ? 'RÉSULTAT GÉNÉRÉ (modifiable)' : 'COLLEZ LA RÉPONSE ICI'}
-              </div>
-              <textarea value={aiPasted} onChange={e=>setAiPasted(e.target.value)}
-                placeholder='{"name":"...","rows":[...],"cols":[...],"cells":[[...]]}'
-                rows={6}
-                style={{width:'100%',background:'#030810',border:'1px solid #1a3a5c',color:'#c8e6f0',padding:'10px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:10,outline:'none',resize:'vertical',lineHeight:1.5}}/>
-            </div>
-            <button className="btn primary full" onClick={importFromAI} disabled={!aiPasted.trim()}
-              style={{borderColor:'#aa44ff',color:'#aa44ff'}}>
-              ✓ IMPORTER ET AUTO-REMPLIR
-            </button>
+            ) : (
+              <button className="btn primary lg" style={{width:'100%'}} onClick={()=>resolveChallenge(challengeRevealed==='correct')}>
+                {challengeRevealed==='correct'?'🎯 TIRER — CONTINUER':'💀 TOUR PERDU — CONTINUER'}
+              </button>
+            )}
+          </div>
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#2a4a5a',marginTop:12}}>
+            INCORRECT = tour perdu · CORRECT = le tir part
           </div>
         </div>
-      )}
-    </div>
-  )
-
-  // ══════════════════════════════════════════════════════════════
-  // GAME LIST
-  // ══════════════════════════════════════════════════════════════
-  return (
-    <div style={{ padding:'36px 40px', maxWidth:1100, margin:'0 auto', position:'relative', zIndex:1 }}>
-
-      <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:24, flexWrap:'wrap' }}>
-        <div>
-          <div style={{ fontFamily:'Bebas Neue,sans-serif',fontSize:32,letterSpacing:5,color:'#00d4ff',marginBottom:4 }}>📚 JEUX ÉDUCATIFS</div>
-          <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',letterSpacing:1 }}>SÉLECTIONNEZ UN JEU POUR JOUER EN CLASSE</div>
-        </div>
-        <button className="btn primary" style={{ marginLeft:'auto' }} onClick={() => { setCreating(true); setStep(1) }}>
-          ✚ CRÉER UN JEU
-        </button>
       </div>
+    )
+  }
 
-      {/* Search */}
-      <input
-        value={search} onChange={e=>setSearch(e.target.value)}
-        placeholder="🔍 Rechercher par nom ou matière..."
-        style={{ width:'100%', maxWidth:420, background:'#091525', border:'1px solid #1a3a5c', color:'#c8e6f0', padding:'10px 16px', fontFamily:'Share Tech Mono,monospace', fontSize:12, outline:'none', marginBottom:28 }}
-      />
-
-      {/* Games */}
-      {myGames === null ? (
-        <div style={{ display:'flex',alignItems:'center',gap:10,color:'#4a7090',fontFamily:'Share Tech Mono,monospace',fontSize:12 }}>
-          <span className="spinner"/> Chargement...
-        </div>
-      ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
-          {filtered.map(game => {
-            const st = ss(game.subject)
-            const nr = game.rows?.length || 0
-            const nc = game.cols?.length || 0
-            return (
-              <div key={game.id} className="card hover-glow fade-up" style={{ padding:24, position:'relative', overflow:'hidden' }}>
-                <div style={{ position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${st.color},transparent)` }}/>
-
-                <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:12 }}>
-                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                    <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,letterSpacing:1,color:st.color,background:st.bg,border:`1px solid ${st.border}`,padding:'2px 8px' }}>
-                      {game.subject || 'Autre'}
-                    </span>
-                    {game.isDefault && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#ffd700',border:'1px solid rgba(255,215,0,.3)',padding:'2px 6px' }}>DÉFAUT</span>}
-                  </div>
-                  {!game.isDefault && (
-                    <button onClick={()=>deleteGame(game.id,game.name)} style={{ background:'none',border:'none',color:'#4a7090',cursor:'pointer',fontSize:16,padding:0,lineHeight:1 }} title="Supprimer">✕</button>
-                  )}
-                </div>
-
-                <div style={{ fontFamily:'Bebas Neue,sans-serif',fontSize:19,letterSpacing:2,color:'#c8e6f0',marginBottom:6 }}>{game.name}</div>
-                <div style={{ fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:14 }}>
-                  GRILLE {nr}×{nc} — {nr*nc} cases
-                </div>
-
-                {/* Cols preview */}
-                <div style={{ display:'flex',gap:4,flexWrap:'wrap',marginBottom:6 }}>
-                  {game.cols?.slice(0,6).map((c,i) => (
-                    <span key={i} style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:st.color,background:st.bg,border:`1px solid ${st.border}`,padding:'1px 6px' }}>
-                      {c.substring(0,8)}
-                    </span>
-                  ))}
-                  {nc > 6 && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090' }}>+{nc-6}</span>}
-                </div>
-                {/* Rows preview */}
-                <div style={{ display:'flex',gap:4,flexWrap:'wrap',marginBottom:16 }}>
-                  {game.rows?.slice(0,5).map((r,i) => (
-                    <span key={i} style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#66aaee',background:'rgba(102,170,238,.07)',border:'1px solid rgba(102,170,238,.2)',padding:'1px 6px' }}>
-                      {r.substring(0,10)}
-                    </span>
-                  ))}
-                  {nr > 5 && <span style={{ fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090' }}>+{nr-5}</span>}
-                </div>
-
-                <button className="btn primary full" onClick={()=>selectGame(game)}>
-                  ▶ JOUER EN CLASSE
-                </button>
-              </div>
-            )
-          })}
-
-          {filtered.length === 0 && (
-            <div style={{ gridColumn:'1/-1',textAlign:'center',padding:48,color:'#4a7090',fontFamily:'Share Tech Mono,monospace',fontSize:12 }}>
-              Aucun jeu trouvé. <span style={{ color:'#00d4ff',cursor:'pointer' }} onClick={()=>setCreating(true)}>Créez le vôtre !</span>
-            </div>
-          )}
-        </div>
-      )}
+  if (screen===S.RESULT && resultMsg) return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'calc(100vh - 60px)',position:'relative',zIndex:1}}>
+      <div className="fade-up" style={{textAlign:'center',padding:40}}>
+        <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:'clamp(60px,15vw,120px)',letterSpacing:6,color:resultMsg.color,textShadow:`0 0 40px ${resultMsg.color}55`,marginBottom:16}}>{resultMsg.text}</div>
+        <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:14,color:'#4a7090',letterSpacing:2}}>{resultMsg.sub}</div>
+      </div>
     </div>
   )
+
+  if (screen===S.WIN) {
+    const winTeam = winner===1?team1:(mode==='vs-ai'?'L\'IA':team2)
+    return (
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'calc(100vh - 60px)',position:'relative',zIndex:1}}>
+        <div className="fade-up" style={{textAlign:'center',padding:40,maxWidth:600}}>
+          <div style={{fontSize:80,marginBottom:20}}>🏆</div>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:'clamp(36px,8vw,72px)',letterSpacing:6,color:'#ffd700',textShadow:'0 0 40px rgba(255,215,0,.4)',marginBottom:12}}>
+            {winTeam.toUpperCase()} GAGNE !
+          </div>
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:13,color:'#4a7090',marginBottom:36}}>
+            {team1}: {shots[0]} tirs · {mode==='vs-ai'?'IA':team2}: {shots[1]} tirs
+          </div>
+          <div style={{display:'flex',gap:14,justifyContent:'center',flexWrap:'wrap'}}>
+            <button className="btn primary lg" onClick={resetGame}>↺ REJOUER</button>
+            <button className="btn lg" onClick={()=>navigate('/learn-games')}>📚 AUTRES JEUX</button>
+            <button className="btn lg" onClick={()=>navigate('/dashboard')}>⬅ ACCUEIL</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return null
 }
