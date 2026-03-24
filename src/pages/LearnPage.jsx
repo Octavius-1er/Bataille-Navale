@@ -86,6 +86,30 @@ function buildChallengeCard(game, r, c) {
   return { row, col, prompt, form: null, answer: null, formLabel: null }
 }
 
+// ── Couleurs par équipe (OVA + local) ────────────────────────────
+const OVA_TEAM_COLORS = [
+  { color:'#00d4ff', bg:'rgba(0,212,255,.18)', border:'#00d4ff', miss:'#003a55', hit:'#004466', label:'CYAN'   },
+  { color:'#ff6600', bg:'rgba(255,102,0,.18)', border:'#ff6600', miss:'#3a1500', hit:'#551e00', label:'ORANGE' },
+  { color:'#00ff88', bg:'rgba(0,255,136,.18)', border:'#00ff88', miss:'#003322', hit:'#004433', label:'VERT'   },
+  { color:'#ff44aa', bg:'rgba(255,68,170,.18)',border:'#ff44aa', miss:'#3a0022', hit:'#550033', label:'ROSE'   },
+  { color:'#ffd700', bg:'rgba(255,215,0,.18)', border:'#ffd700', miss:'#332e00', hit:'#554b00', label:'OR'     },
+  { color:'#aa44ff', bg:'rgba(170,68,255,.18)',border:'#aa44ff', miss:'#220044', hit:'#330066', label:'VIOLET' },
+]
+const LOCAL_TEAM_COLORS = [
+  { color:'#00d4ff', bg:'rgba(0,212,255,.18)', border:'#00d4ff', miss:'#003a55', hit:'#004466' },
+  { color:'#ff6600', bg:'rgba(255,102,0,.18)', border:'#ff6600', miss:'#3a1500', hit:'#551e00' },
+]
+
+// ── Bateaux stylés SVG ────────────────────────────────────────────
+const SHIP_SVG = {
+  carrier:    (c='#66aaee') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="2,18 7,8 37,8 42,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="11" y="5" width="18" height="7" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><rect x="18" y="1" width="4" height="5" fill={c+'44'} stroke={c} strokeWidth="0.7"/><line x1="20" y1="0" x2="20" y2="1" stroke={c} strokeWidth="1"/><rect x="13" y="13" width="4" height="3" fill={c+'22'} stroke={c} strokeWidth="0.5"/><rect x="27" y="13" width="4" height="3" fill={c+'22'} stroke={c} strokeWidth="0.5"/><line x1="2" y1="18" x2="42" y2="18" stroke={c} strokeWidth="0.5" opacity="0.4"/></svg>,
+  battleship: (c='#aa77ee') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="3,18 9,8 35,8 41,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="13" y="5" width="16" height="7" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><rect x="19" y="2" width="4" height="5" fill={c+'44'} stroke={c} strokeWidth="0.7"/><circle cx="22" cy="12" r="2.5" fill={c+'33'} stroke={c} strokeWidth="0.7"/><line x1="20" y1="12" x2="24" y2="12" stroke={c} strokeWidth="0.8"/></svg>,
+  cruiser:    (c='#55cc88') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="4,18 10,9 34,9 40,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="14" y="6" width="14" height="6" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><rect x="19" y="3" width="4" height="5" fill={c+'44'} stroke={c} strokeWidth="0.7"/><rect x="16" y="13" width="3" height="3" fill={c+'22'} stroke={c} strokeWidth="0.5"/></svg>,
+  submarine:  (c='#44bb77') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><ellipse cx="22" cy="14" rx="18" ry="5.5" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="16" y="7" width="10" height="8" rx="4" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><rect x="20" y="3" width="3" height="5" fill={c+'44'} stroke={c} strokeWidth="0.7"/><circle cx="33" cy="14" r="2" fill={c+'33'} stroke={c} strokeWidth="0.6"/><line x1="33" y1="12" x2="33" y2="9" stroke={c} strokeWidth="0.7"/></svg>,
+  destroyer:  (c='#ee8844') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="5,18 12,9 32,9 39,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="15" y="6" width="12" height="6" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><line x1="20" y1="3" x2="20" y2="7" stroke={c} strokeWidth="1.2"/><line x1="24" y1="4" x2="24" y2="7" stroke={c} strokeWidth="1"/></svg>,
+  patrol:     (c='#cc88cc') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="6,18 14,9 30,9 38,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="17" y="6" width="10" height="6" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><line x1="22" y1="3" x2="22" y2="7" stroke={c} strokeWidth="1.2"/></svg>,
+}
+
 // ── Ship styles ───────────────────────────────────────────────────
 const SHIP_STYLES = {
   carrier:    { bg:'#0e2a4a', border:'#3377bb', label:'✈', color:'#66aaee' },
@@ -134,13 +158,46 @@ function LearnGrid({ board, game, shipMap = {}, onCellClick, onCellHover, onCell
               const th = theme || {}
               const skinSt = (shipSkin && shipId && shipSkin[shipId]) ? shipSkin[shipId] : st
               let bg=th.cellBg||'#050d1a', bc=th.cellBorder||'#0c1e30', content=null
-              if (skinSt && (v==='ship'||v===null)) { bg=skinSt.bg; bc=skinSt.border }
-              if (v==='preview-valid')   { bg='rgba(0,212,255,.2)'; bc='#00d4ff' }
-              if (v==='preview-invalid') { bg='rgba(255,58,58,.2)'; bc='#ff3a3a' }
-              if (v==='miss')  { bg=th.missBg||'#0a2a4a'; bc=th.cellBorder||'#1a5a8a'; content=<span style={{color:'#4a9abb',fontSize:20,lineHeight:1}}>·</span> }
-              if (v==='hit')   { bg=th.hitBg||'#4a1800'; bc='#cc5500'; content=<span style={{color:'#ff6600',fontSize:15}}>✕</span> }
-              if (v==='sunk')  { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:15}}>✕</span> }
-              const hint = (!v && !st && interactive)
+
+              // Ship cell — show styled SVG
+              if (shipId && (v==='ship'||v===null)) {
+                const sc = skinSt || st
+                bg = sc ? sc.bg : '#050d1a'
+                bc = sc ? sc.border : '#0c1e30'
+                const svgColor = sc ? sc.color : '#66aaee'
+                const svgFn = SHIP_SVG[shipId] || SHIP_SVG.patrol
+                content = <div style={{width:'100%',height:'100%',padding:2,boxSizing:'border-box'}}>{svgFn(svgColor)}</div>
+              }
+
+              if (v==='preview-valid')   { bg='rgba(0,212,255,.2)'; bc='#00d4ff'; content=null }
+              if (v==='preview-invalid') { bg='rgba(255,58,58,.2)'; bc='#ff3a3a'; content=null }
+
+              // OVA colored cells: 'hit-N', 'miss-N', 'sunk-N'
+              const ovaMatch = v && ovaColorMap && v.match(/^(miss|hit|sunk)-(\d+)$/)
+              if (ovaMatch) {
+                const [, type, idx] = ovaMatch
+                const oc = OVA_TEAM_COLORS[parseInt(idx) % OVA_TEAM_COLORS.length]
+                if (type==='miss') { bg=oc.miss; bc=oc.border; content=<span style={{color:oc.color,fontSize:20,lineHeight:1}}>·</span> }
+                if (type==='hit')  { bg=oc.hit;  bc=oc.border; content=<span style={{color:oc.color,fontSize:15,fontWeight:'bold'}}>✕</span> }
+                if (type==='sunk') { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:15}}>✕</span> }
+              }
+              // Local team colored cells: 'hit-t1', 'miss-t1', 'sunk-t1', etc.
+              else if (!ovaMatch && v) {
+                const localMatch = v.match(/^(miss|hit|sunk)-(t[12])$/)
+                if (localMatch) {
+                  const [, type, team] = localMatch
+                  const lc = team==='t1' ? LOCAL_TEAM_COLORS[0] : LOCAL_TEAM_COLORS[1]
+                  if (type==='miss') { bg=lc.miss; bc=lc.border; content=<span style={{color:lc.color,fontSize:20,lineHeight:1}}>·</span> }
+                  if (type==='hit')  { bg=lc.hit;  bc=lc.border; content=<span style={{color:lc.color,fontSize:15,fontWeight:'bold'}}>✕</span> }
+                  if (type==='sunk') { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:15}}>✕</span> }
+                } else {
+                  if (v==='miss')  { bg=th.missBg||'#0a2a4a'; bc=th.cellBorder||'#1a5a8a'; content=<span style={{color:'#4a9abb',fontSize:20,lineHeight:1}}>·</span> }
+                  if (v==='hit')   { bg=th.hitBg||'#4a1800'; bc='#cc5500'; content=<span style={{color:'#ff6600',fontSize:15}}>✕</span> }
+                  if (v==='sunk')  { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:15}}>✕</span> }
+                }
+              }
+
+              const hint = (!v && !shipId && interactive)
                 ? <span style={{fontSize:8,color:'#1a3a5c',fontFamily:'Share Tech Mono,monospace',textAlign:'center',padding:'0 2px',lineHeight:1.3}}>
                     {colLabel.substring(0,6)}<br/>{rowLabel.substring(0,6)}
                   </span>
@@ -150,7 +207,7 @@ function LearnGrid({ board, game, shipMap = {}, onCellClick, onCellHover, onCell
                   onClick={()=>interactive&&onCellClick?.(r,c)}
                   onMouseEnter={()=>interactive&&onCellHover?.(r,c)}
                   onMouseLeave={()=>interactive&&onCellLeave?.()}
-                  style={{ width:cellW, height:cellH, background:bg, border:`2px solid ${bc}`, cursor:interactive?'crosshair':'default', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .1s', flexShrink:0 }}
+                  style={{ width:cellW, height:cellH, background:bg, border:`2px solid ${bc}`, cursor:interactive?'crosshair':'default', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .1s', flexShrink:0, overflow:'hidden', position:'relative' }}
                 >{content||hint}</div>
               )
             })}
@@ -339,9 +396,22 @@ export default function LearnPage() {
 
     const board   = mode==='one-vs-all' ? attackBoard1Ref.current : (currentTeam===1 ? attackBoard1Ref.current : attackBoard2Ref.current)
     const newBoard = board.map(row=>[...row])
-    if (result==='sunk') sunkShip.cells.forEach(sc=>{newBoard[sc.r][sc.c]='sunk'})
-    else newBoard[r][c]=result
-    attackBoard1Ref.current=newBoard
+    if (mode==='one-vs-all') {
+      if (result==='sunk') sunkShip.cells.forEach(sc=>{newBoard[sc.r][sc.c]=`sunk-${ovaAttackerIdx}`})
+      else newBoard[r][c]=`${result}-${ovaAttackerIdx}`
+      attackBoard1Ref.current=newBoard
+    } else if (mode==='local') {
+      const tag = currentTeam===1 ? 't1' : 't2'
+      if (result==='sunk') sunkShip.cells.forEach(sc=>{newBoard[sc.r][sc.c]=`sunk-${tag}`})
+      else newBoard[r][c]=`${result}-${tag}`
+      if (currentTeam===1) attackBoard1Ref.current=newBoard
+      else attackBoard2Ref.current=newBoard
+    } else {
+      if (result==='sunk') sunkShip.cells.forEach(sc=>{newBoard[sc.r][sc.c]='sunk'})
+      else newBoard[r][c]=result
+      if (currentTeam===1) attackBoard1Ref.current=newBoard
+      else attackBoard2Ref.current=newBoard
+    }
     setDisplayBoard(newBoard)
 
     const label = `${game.rows[r]} + ${game.cols[c]}`
@@ -583,38 +653,45 @@ export default function LearnPage() {
   }
 
   if (screen===S.BATTLE) {
-    const isOVA  = mode==='one-vs-all'
-    const isVsAI = mode==='vs-ai'
+    const isOVA   = mode==='one-vs-all'
+    const isVsAI  = mode==='vs-ai'
+    const isLocal = mode==='local'
+    const ovaColor   = isOVA   ? OVA_TEAM_COLORS[ovaAttackerIdx % OVA_TEAM_COLORS.length] : null
+    const localColor = isLocal ? LOCAL_TEAM_COLORS[currentTeam===1 ? 0 : 1] : null
+    const accentColor = isOVA ? ovaColor.color : isLocal ? localColor.color : '#ffd700'
     const tname  = isOVA ? attackerNames[ovaAttackerIdx] : (currentTeam===1?team1:(isVsAI?'Classe':team2))
     const ename  = isOVA ? defenderName : (currentTeam===1?(isVsAI?'IA':team2):team1)
     return (
       <div style={{padding:'20px 32px',maxWidth:1100,margin:'0 auto',position:'relative',zIndex:1}}>
         {/* Status */}
         <div className="card" style={{padding:'14px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
-          <span className="dot" style={{background: isOVA?'#ff6600':'gold'}}/>
-          <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:isOVA?'#ff6600':'#ffd700'}}>
+          <span className="dot" style={{background:accentColor}}/>
+          <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:accentColor}}>
             {isOVA ? '🎯' : '⚔'} {tname.toUpperCase()} — CLIQUE ET DIS LA PHRASE !
           </span>
           {isOVA && (
             <div style={{display:'flex',gap:8,flexWrap:'wrap',marginLeft:8}}>
-              {attackerNames.map((n,i)=>(
-                <span key={i} style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,padding:'2px 8px',
-                  border:`1px solid ${i===ovaAttackerIdx?'#ff6600':'#1a3a5c'}`,
-                  color:i===ovaAttackerIdx?'#ff6600':'#4a7090',
-                  background:i===ovaAttackerIdx?'rgba(255,102,0,.1)':'transparent'}}>
-                  {n}
-                </span>
-              ))}
+              {attackerNames.map((n,i)=>{
+                const oc = OVA_TEAM_COLORS[i % OVA_TEAM_COLORS.length]
+                return (
+                  <span key={i} style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,padding:'2px 8px',
+                    border:`1px solid ${i===ovaAttackerIdx?oc.border:'#1a3a5c'}`,
+                    color:i===ovaAttackerIdx?oc.color:'#4a7090',
+                    background:i===ovaAttackerIdx?oc.bg:'transparent'}}>
+                    {i===ovaAttackerIdx?'▶ ':''}{n}
+                  </span>
+                )
+              })}
             </div>
           )}
-          <div style={{marginLeft:'auto',display:'flex',gap:16}}>
+          <div style={{marginLeft:'auto',display:'flex',gap:16,alignItems:'center'}}>
             {isOVA ? (
               <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>
                 🛡 {defenderName} — {team1ShipsRef.current.filter(s=>!s.sunk).length} bateau(x) restant(s)
               </span>
             ) : (<>
-              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{team1}: {shots[0]} tir{shots[0]!==1?'s':''}</span>
-              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>{isVsAI?'IA':team2}: {shots[1]} tir{shots[1]!==1?'s':''}</span>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:LOCAL_TEAM_COLORS[0].color}}>{team1}: {shots[0]} tir{shots[0]!==1?'s':''}</span>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:isVsAI?'#4a7090':LOCAL_TEAM_COLORS[1].color}}>{isVsAI?'IA':team2}: {shots[1]} tir{shots[1]!==1?'s':''}</span>
             </>)}
           </div>
         </div>
@@ -622,10 +699,18 @@ export default function LearnPage() {
         {/* Boards */}
         <div style={{display:'grid',gridTemplateColumns:isVsAI?'1fr 1fr':'1fr',gap:16,marginBottom:16}}>
           <div className="card" style={{padding:20}}>
-            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:3,color:'#ff3a3a',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:3,color:'#ff3a3a',marginBottom:isOVA?8:14,display:'flex',alignItems:'center',gap:8}}>
               <span className="dot red"/>MER {isOVA?'DU DÉFENSEUR':'ENNEMIE'} — {ename.toUpperCase()}
             </div>
-            <LearnGrid board={displayBoard} game={game} onCellClick={onCellClick} interactive={true} hideShips={true} theme={SEA_THEMES[equippedTheme]||SEA_THEMES.default}/>
+            {isOVA && (
+              <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
+                {attackerNames.map((n,i) => {
+                  const oc = OVA_TEAM_COLORS[i % OVA_TEAM_COLORS.length]
+                  return <span key={i} style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,padding:'2px 8px',border:`1px solid ${oc.border}`,color:oc.color,background:i===ovaAttackerIdx?oc.bg:'transparent'}}>{i===ovaAttackerIdx?'▶ ':''}{n}</span>
+                })}
+              </div>
+            )}
+            <LearnGrid board={displayBoard} game={game} onCellClick={onCellClick} interactive={true} hideShips={true} theme={SEA_THEMES[equippedTheme]||SEA_THEMES.default} ovaColorMap={isOVA||isLocal}/>
           </div>
           {isVsAI && (
             <div className="card" style={{padding:20}}>
