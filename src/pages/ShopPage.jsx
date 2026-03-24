@@ -5,7 +5,7 @@ import { db } from '../lib/firebase'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
 import { RewardedAdButton, AdBanner } from '../components/AdSense'
-import { PACKS, ALL_ITEMS, SEA_THEMES, SHIP_SKINS, RARITY, openPack, COIN_REWARDS, getItemIcon } from '../lib/shopData'
+import { PACKS, ALL_ITEMS, SECRET_ITEMS, SEA_THEMES, SHIP_SKINS, RARITY, openPack, COIN_REWARDS, getItemIcon } from '../lib/shopData'
 
 const TAB = { PACKS:'packs', ITEMS:'items' }
 
@@ -372,8 +372,105 @@ export default function ShopPage() {
 
       {/* ── PACKS TAB ──────────────────────────────────────────────── */}
       {tab===TAB.PACKS && (
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:20}}>
-          {Object.values(PACKS).map(pack => (
+        <div style={{display:'flex',flexDirection:'column',gap:20}}>
+
+          {/* Pack Secret — affiché en premier, pleine largeur, très stylé */}
+          {(() => { const pack = PACKS.secret; return (
+            <div key="secret" className="card fade-up" style={{
+              padding:0, textAlign:'center', position:'relative', overflow:'hidden',
+              border:'2px solid #ff005588',
+              boxShadow:'0 0 60px rgba(255,0,85,.25), 0 0 120px rgba(255,0,85,.1)',
+            }}>
+              {/* Animated gradient border */}
+              <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#ff0055,#ff00ff,#aa00ff,#ff0055)',backgroundSize:'200%',animation:'shimmer 2s linear infinite'}}/>
+              <style>{`@keyframes shimmer{to{background-position:200% 0}}`}</style>
+              <div style={{position:'absolute',inset:0,background:'radial-gradient(circle at 50% 30%,rgba(255,0,85,.12),transparent 60%)',pointerEvents:'none'}}/>
+
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:0}}>
+                {/* LEFT — info */}
+                <div style={{padding:'36px 32px',textAlign:'left',borderRight:'1px solid #ff005533'}}>
+                  <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#ff0055',letterSpacing:3,marginBottom:12}}>✦ EXCLUSIF ✦ LIMITÉ ✦ SECRET ✦</div>
+                  <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:38,letterSpacing:5,color:'#ff0055',marginBottom:4,textShadow:'0 0 30px rgba(255,0,85,.5)'}}>
+                    🔮 PACK SECRET
+                  </div>
+                  <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:12,color:'#ff88aa',marginBottom:20,lineHeight:1.7}}>
+                    5 objets <span style={{color:'#ffd700'}}>LÉGENDAIRES</span> introuvables dans les autres packs.<br/>
+                    Mer Rouge · Mer Lunaire · Brainrot · Astronaute · Égyptien
+                  </div>
+
+                  {/* Preview items */}
+                  <div style={{display:'flex',gap:8,marginBottom:24,flexWrap:'wrap'}}>
+                    {SECRET_ITEMS.map(it => (
+                      <div key={it.id} style={{
+                        padding:'6px 10px',
+                        border:'1px solid #ff005544',
+                        background:'rgba(255,0,85,.06)',
+                        fontFamily:'Share Tech Mono,monospace',fontSize:9,
+                        color: owned.includes(it.id) ? '#00ff88' : '#ff88aa',
+                        position:'relative',
+                      }}>
+                        {it.icon} {it.name}
+                        {owned.includes(it.id) && <span style={{marginLeft:4,color:'#00ff88'}}>✓</span>}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={()=>buyPack(pack)}
+                    disabled={buying===pack.id||coins<pack.cost}
+                    style={{padding:'16px 40px',fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,
+                      background:coins>=pack.cost?'rgba(255,0,85,.2)':'transparent',
+                      border:`2px solid ${coins>=pack.cost?'#ff0055':'#3a1a2a'}`,
+                      color:coins>=pack.cost?'#ff0055':'#4a2a3a',
+                      cursor:coins>=pack.cost?'pointer':'not-allowed',
+                      transition:'all .2s',boxShadow:coins>=pack.cost?'0 0 20px rgba(255,0,85,.3)':'none',
+                    }}
+                    onMouseEnter={e=>{if(coins>=pack.cost){e.currentTarget.style.background='rgba(255,0,85,.35)';e.currentTarget.style.boxShadow='0 0 40px rgba(255,0,85,.5)'}}}
+                    onMouseLeave={e=>{if(coins>=pack.cost){e.currentTarget.style.background='rgba(255,0,85,.2)';e.currentTarget.style.boxShadow='0 0 20px rgba(255,0,85,.3)'}}}
+                  >
+                    🪙 {pack.cost} PIÈCES SEULEMENT
+                  </button>
+                  {coins<pack.cost&&(
+                    <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#ff3a3a',marginTop:8}}>
+                      Manque {pack.cost-coins} 🪙
+                    </div>
+                  )}
+                </div>
+
+                {/* RIGHT — visual preview grid des 5 items */}
+                <div style={{padding:'36px 28px',display:'flex',flexDirection:'column',gap:12,justifyContent:'center'}}>
+                  {SECRET_ITEMS.map((it,i) => {
+                    const isOwned = owned.includes(it.id)
+                    const iconUrl = getItemIcon(it.id)
+                    const colors = ['#ff0055','#c8d4ff','#ff00ff','#aaccff','#c8a000']
+                    const col = colors[i % colors.length]
+                    return (
+                      <div key={it.id} style={{
+                        display:'flex',alignItems:'center',gap:12,padding:'10px 14px',
+                        border:`1px solid ${col}44`,background:`${col}0a`,position:'relative',
+                        overflow:'hidden',
+                      }}>
+                        <div style={{position:'absolute',top:0,left:0,width:3,bottom:0,background:col,opacity:.8}}/>
+                        {iconUrl
+                          ? <img src={iconUrl} width={36} height={36} style={{borderRadius:4,flexShrink:0}}/>
+                          : <div style={{width:36,height:36,fontSize:22,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{it.icon}</div>
+                        }
+                        <div style={{flex:1,textAlign:'left'}}>
+                          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:14,letterSpacing:2,color:col}}>{it.name}</div>
+                          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:8,color:'#4a7090'}}>{it.type==='sea_theme'?'THÈME MER':'NAVIRES'} · LÉGENDAIRE</div>
+                        </div>
+                        {isOwned && <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#00ff88',border:'1px solid rgba(0,255,136,.3)',padding:'2px 6px'}}>✓ POSSÉDÉ</span>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )})()}
+
+          {/* Autres packs — grille normale */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:20}}>
+            {Object.values(PACKS).filter(p=>!p.secret).map(pack => (
             <div key={pack.id} className="card fade-up" style={{padding:32,textAlign:'center',position:'relative',overflow:'hidden',border:`1px solid ${pack.color}44`}}>
               <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${pack.color},transparent)`}}/>
               <div style={{position:'absolute',inset:0,background:`radial-gradient(circle at 50% 0%,${pack.glow},transparent 60%)`,pointerEvents:'none'}}/>
@@ -382,7 +479,6 @@ export default function ShopPage() {
               <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:26,letterSpacing:4,color:pack.color,marginBottom:6}}>{pack.name}</div>
               <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:8}}>{pack.desc}</div>
 
-              {/* Rarity distribution */}
               <div style={{display:'flex',gap:6,justifyContent:'center',marginBottom:20,flexWrap:'wrap'}}>
                 {[...new Set(pack.rarityPool)].map(r=>(
                   <span key={r} style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:RARITY[r].color,border:`1px solid ${RARITY[r].color}55`,padding:'2px 8px'}}>
@@ -414,6 +510,7 @@ export default function ShopPage() {
               )}
             </div>
           ))}
+          </div>
         </div>
       )}
 
