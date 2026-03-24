@@ -3,7 +3,7 @@
 // La carte montre : ligne + colonne + contenu de la case
 // Le prof valide oralement, puis le tir part ou le tour est perdu
 
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useToast } from '../components/Toast'
@@ -102,12 +102,123 @@ const LOCAL_TEAM_COLORS = [
 
 // ── Bateaux stylés SVG ────────────────────────────────────────────
 const SHIP_SVG = {
-  carrier:    (c='#66aaee') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="2,18 7,8 37,8 42,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="11" y="5" width="18" height="7" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><rect x="18" y="1" width="4" height="5" fill={c+'44'} stroke={c} strokeWidth="0.7"/><line x1="20" y1="0" x2="20" y2="1" stroke={c} strokeWidth="1"/><rect x="13" y="13" width="4" height="3" fill={c+'22'} stroke={c} strokeWidth="0.5"/><rect x="27" y="13" width="4" height="3" fill={c+'22'} stroke={c} strokeWidth="0.5"/><line x1="2" y1="18" x2="42" y2="18" stroke={c} strokeWidth="0.5" opacity="0.4"/></svg>,
-  battleship: (c='#aa77ee') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="3,18 9,8 35,8 41,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="13" y="5" width="16" height="7" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><rect x="19" y="2" width="4" height="5" fill={c+'44'} stroke={c} strokeWidth="0.7"/><circle cx="22" cy="12" r="2.5" fill={c+'33'} stroke={c} strokeWidth="0.7"/><line x1="20" y1="12" x2="24" y2="12" stroke={c} strokeWidth="0.8"/></svg>,
-  cruiser:    (c='#55cc88') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="4,18 10,9 34,9 40,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="14" y="6" width="14" height="6" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><rect x="19" y="3" width="4" height="5" fill={c+'44'} stroke={c} strokeWidth="0.7"/><rect x="16" y="13" width="3" height="3" fill={c+'22'} stroke={c} strokeWidth="0.5"/></svg>,
-  submarine:  (c='#44bb77') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><ellipse cx="22" cy="14" rx="18" ry="5.5" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="16" y="7" width="10" height="8" rx="4" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><rect x="20" y="3" width="3" height="5" fill={c+'44'} stroke={c} strokeWidth="0.7"/><circle cx="33" cy="14" r="2" fill={c+'33'} stroke={c} strokeWidth="0.6"/><line x1="33" y1="12" x2="33" y2="9" stroke={c} strokeWidth="0.7"/></svg>,
-  destroyer:  (c='#ee8844') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="5,18 12,9 32,9 39,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="15" y="6" width="12" height="6" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><line x1="20" y1="3" x2="20" y2="7" stroke={c} strokeWidth="1.2"/><line x1="24" y1="4" x2="24" y2="7" stroke={c} strokeWidth="1"/></svg>,
-  patrol:     (c='#cc88cc') => <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg"><polygon points="6,18 14,9 30,9 38,18" fill={c+'2a'} stroke={c} strokeWidth="1"/><rect x="17" y="6" width="10" height="6" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.8"/><line x1="22" y1="3" x2="22" y2="7" stroke={c} strokeWidth="1.2"/></svg>,
+  carrier: (c='#66aaee') => (
+    <svg width="100%" height="100%" viewBox="0 0 56 24" xmlns="http://www.w3.org/2000/svg">
+      {/* Hull */}
+      <path d="M3 19 L8 10 L48 10 L53 19 Z" fill={c+'22'} stroke={c} strokeWidth="1.2"/>
+      {/* Waterline */}
+      <line x1="3" y1="19" x2="53" y2="19" stroke={c} strokeWidth="0.6" opacity="0.5"/>
+      {/* Superstructure */}
+      <rect x="14" y="6" width="22" height="8" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.9"/>
+      {/* Bridge */}
+      <rect x="22" y="2" width="8" height="6" rx="1" fill={c+'2a'} stroke={c} strokeWidth="0.8"/>
+      {/* Mast */}
+      <line x1="26" y1="0" x2="26" y2="3" stroke={c} strokeWidth="1.2"/>
+      <line x1="23" y1="1" x2="29" y2="1" stroke={c} strokeWidth="0.7"/>
+      {/* Radar */}
+      <circle cx="26" cy="0.5" r="1" fill={c} opacity="0.8"/>
+      {/* Deck details */}
+      <rect x="8" y="13" width="6" height="4" rx="0.5" fill={c+'22'} stroke={c} strokeWidth="0.5"/>
+      <rect x="40" y="13" width="6" height="4" rx="0.5" fill={c+'22'} stroke={c} strokeWidth="0.5"/>
+      {/* Turrets */}
+      <ellipse cx="14" cy="12" rx="3" ry="2" fill={c+'33'} stroke={c} strokeWidth="0.7"/>
+      <ellipse cx="36" cy="12" rx="3" ry="2" fill={c+'33'} stroke={c} strokeWidth="0.7"/>
+      {/* Portholes */}
+      <circle cx="18" cy="16" r="1" fill={c+'44'} stroke={c} strokeWidth="0.4"/>
+      <circle cx="24" cy="16" r="1" fill={c+'44'} stroke={c} strokeWidth="0.4"/>
+      <circle cx="30" cy="16" r="1" fill={c+'44'} stroke={c} strokeWidth="0.4"/>
+      <circle cx="36" cy="16" r="1" fill={c+'44'} stroke={c} strokeWidth="0.4"/>
+    </svg>
+  ),
+  battleship: (c='#aa77ee') => (
+    <svg width="100%" height="100%" viewBox="0 0 48 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 19 L9 10 L39 10 L45 19 Z" fill={c+'22'} stroke={c} strokeWidth="1.2"/>
+      <line x1="3" y1="19" x2="45" y2="19" stroke={c} strokeWidth="0.6" opacity="0.5"/>
+      <rect x="13" y="6" width="18" height="8" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.9"/>
+      <rect x="18" y="2" width="8" height="6" rx="1" fill={c+'2a'} stroke={c} strokeWidth="0.8"/>
+      <line x1="22" y1="0" x2="22" y2="3" stroke={c} strokeWidth="1.2"/>
+      {/* Big gun turrets front & back */}
+      <rect x="5" y="12" width="8" height="5" rx="1" fill={c+'22'} stroke={c} strokeWidth="0.7"/>
+      <line x1="7" y1="13.5" x2="3" y2="11" stroke={c} strokeWidth="1.2"/>
+      <line x1="10" y1="13.5" x2="6" y2="11" stroke={c} strokeWidth="1.2"/>
+      <rect x="35" y="12" width="8" height="5" rx="1" fill={c+'22'} stroke={c} strokeWidth="0.7"/>
+      <line x1="37" y1="13.5" x2="41" y2="11" stroke={c} strokeWidth="1.2"/>
+      <line x1="40" y1="13.5" x2="44" y2="11" stroke={c} strokeWidth="1.2"/>
+      <circle cx="18" cy="16" r="1" fill={c+'44'} stroke={c} strokeWidth="0.4"/>
+      <circle cx="28" cy="16" r="1" fill={c+'44'} stroke={c} strokeWidth="0.4"/>
+    </svg>
+  ),
+  cruiser: (c='#55cc88') => (
+    <svg width="100%" height="100%" viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 17 L8 9 L36 9 L41 17 Z" fill={c+'22'} stroke={c} strokeWidth="1.1"/>
+      <line x1="3" y1="17" x2="41" y2="17" stroke={c} strokeWidth="0.6" opacity="0.5"/>
+      <rect x="12" y="5" width="16" height="7" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.9"/>
+      <rect x="17" y="2" width="7" height="5" rx="1" fill={c+'2a'} stroke={c} strokeWidth="0.8"/>
+      <line x1="20" y1="0" x2="20" y2="2" stroke={c} strokeWidth="1.2"/>
+      {/* Missile launcher */}
+      <rect x="5" y="11" width="6" height="4" rx="0.5" fill={c+'22'} stroke={c} strokeWidth="0.6"/>
+      <line x1="6" y1="12" x2="6" y2="9" stroke={c} strokeWidth="0.8"/>
+      <line x1="8" y1="12" x2="8" y2="9" stroke={c} strokeWidth="0.8"/>
+      <line x1="10" y1="12" x2="10" y2="9" stroke={c} strokeWidth="0.8"/>
+      <rect x="33" y="11" width="6" height="4" rx="0.5" fill={c+'22'} stroke={c} strokeWidth="0.6"/>
+      <circle cx="16" cy="14" r="1" fill={c+'44'} stroke={c} strokeWidth="0.4"/>
+      <circle cx="24" cy="14" r="1" fill={c+'44'} stroke={c} strokeWidth="0.4"/>
+    </svg>
+  ),
+  submarine: (c='#44bb77') => (
+    <svg width="100%" height="100%" viewBox="0 0 44 20" xmlns="http://www.w3.org/2000/svg">
+      {/* Body */}
+      <ellipse cx="22" cy="14" rx="19" ry="5.5" fill={c+'1a'} stroke={c} strokeWidth="1.2"/>
+      {/* Conning tower */}
+      <path d="M17 9 L18 4 L26 4 L27 9 Z" fill={c+'22'} stroke={c} strokeWidth="0.9"/>
+      {/* Periscope */}
+      <line x1="20" y1="4" x2="20" y2="1" stroke={c} strokeWidth="1"/>
+      <line x1="20" y1="1" x2="23" y2="1" stroke={c} strokeWidth="1"/>
+      <circle cx="23" cy="1" r="1" fill={c+'88'} stroke={c} strokeWidth="0.6"/>
+      {/* Sonar dome */}
+      <ellipse cx="38" cy="14" rx="3" ry="3" fill={c+'33'} stroke={c} strokeWidth="0.8"/>
+      {/* Propeller */}
+      <line x1="4" y1="12" x2="4" y2="16" stroke={c} strokeWidth="1.5"/>
+      <line x1="2" y1="14" x2="6" y2="14" stroke={c} strokeWidth="1.5"/>
+      {/* Portholes */}
+      <circle cx="16" cy="14" r="1.2" fill={c+'33'} stroke={c} strokeWidth="0.5"/>
+      <circle cx="22" cy="14" r="1.2" fill={c+'33'} stroke={c} strokeWidth="0.5"/>
+      <circle cx="28" cy="14" r="1.2" fill={c+'33'} stroke={c} strokeWidth="0.5"/>
+      {/* Fin */}
+      <path d="M8 14 L6 19 L10 19" fill={c+'22'} stroke={c} strokeWidth="0.7"/>
+    </svg>
+  ),
+  destroyer: (c='#ee8844') => (
+    <svg width="100%" height="100%" viewBox="0 0 40 20" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 17 L8 9 L32 9 L38 17 Z" fill={c+'22'} stroke={c} strokeWidth="1.1"/>
+      <line x1="2" y1="17" x2="38" y2="17" stroke={c} strokeWidth="0.6" opacity="0.5"/>
+      <rect x="12" y="5" width="14" height="7" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.9"/>
+      <rect x="16" y="2" width="7" height="5" rx="1" fill={c+'2a'} stroke={c} strokeWidth="0.8"/>
+      {/* Twin smokestacks */}
+      <rect x="20" y="0" width="2.5" height="5" rx="0.5" fill={c+'44'} stroke={c} strokeWidth="0.7"/>
+      <rect x="24" y="1" width="2.5" height="4" rx="0.5" fill={c+'44'} stroke={c} strokeWidth="0.7"/>
+      {/* Torpedo tubes */}
+      <rect x="4" y="12" width="7" height="3.5" rx="0.5" fill={c+'22'} stroke={c} strokeWidth="0.6"/>
+      <line x1="5" y1="13.5" x2="11" y2="13.5" stroke={c} strokeWidth="0.5"/>
+      <line x1="5" y1="14.5" x2="11" y2="14.5" stroke={c} strokeWidth="0.5"/>
+      <rect x="29" y="12" width="7" height="3.5" rx="0.5" fill={c+'22'} stroke={c} strokeWidth="0.6"/>
+    </svg>
+  ),
+  patrol: (c='#cc88cc') => (
+    <svg width="100%" height="100%" viewBox="0 0 36 18" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 15 L7 8 L29 8 L34 15 Z" fill={c+'22'} stroke={c} strokeWidth="1"}/>
+      <line x1="2" y1="15" x2="34" y2="15" stroke={c} strokeWidth="0.6" opacity="0.5"/>
+      <rect x="11" y="4" width="13" height="7" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.9"/>
+      <line x1="17" y1="1" x2="17" y2="4" stroke={c} strokeWidth="1.2"/>
+      <line x1="14" y1="2" x2="20" y2="2" stroke={c} strokeWidth="0.7"/>
+      {/* Machine gun */}
+      <rect x="5" y="10" width="5" height="3" rx="0.5" fill={c+'22'} stroke={c} strokeWidth="0.6"/>
+      <line x1="6" y1="11.5" x2="4" y2="9.5" stroke={c} strokeWidth="1"/>
+      {/* Wake lines */}
+      <path d="M2 16 Q5 14 8 16" fill="none" stroke={c} strokeWidth="0.5" opacity="0.4"/>
+      <path d="M28 16 Q31 14 34 16" fill="none" stroke={c} strokeWidth="0.5" opacity="0.4"/>
+    </svg>
+  ),
 }
 
 // ── Ship styles ───────────────────────────────────────────────────
@@ -126,28 +237,45 @@ function buildShipMap(ships) {
   return map
 }
 
-// ── Grid — dynamic size, verb/pronoun labels ──────────────────────
-function LearnGrid({ board, game, shipMap = {}, onCellClick, onCellHover, onCellLeave, interactive = false, hideShips = false, theme = null, shipSkin = null }) {
+// ── Grid — fully responsive, mobile-first ────────────────────────
+function LearnGrid({ board, game, shipMap = {}, onCellClick, onCellHover, onCellLeave, interactive = false, hideShips = false, theme = null, shipSkin = null, ovaColorMap = false }) {
   const NR = game.rows.length
   const NC = game.cols.length
-  const W  = typeof window !== 'undefined' ? window.innerWidth  : 900
-  const H  = typeof window !== 'undefined' ? window.innerHeight : 700
-  const labelW = 88
-  const cellW  = Math.max(60, Math.min(110, Math.floor((W - labelW - 80) / NC)))
-  const cellH  = Math.max(48, Math.min(80,  Math.floor((H - 320)         / NR)))
+
+  // Responsive cell sizing using CSS container approach
+  const [cellW, setCellW] = React.useState(52)
+  const [cellH, setCellH] = React.useState(44)
+  const [labelW, setLabelW] = React.useState(70)
+  const containerRef = React.useRef(null)
+
+  React.useEffect(() => {
+    function resize() {
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const isMobile = vw < 640
+      const lw = isMobile ? 58 : 88
+      const availW = Math.min(vw, 900) - lw - (isMobile ? 24 : 80)
+      const cw = Math.max(isMobile ? 38 : 52, Math.min(isMobile ? 70 : 110, Math.floor(availW / NC)))
+      const ch = Math.max(isMobile ? 36 : 44, Math.min(isMobile ? 60 : 80, Math.floor((vh - (isMobile ? 260 : 320)) / NR)))
+      setCellW(cw); setCellH(ch); setLabelW(lw)
+    }
+    resize()
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
+  }, [NC, NR])
 
   return (
-    <div style={{ userSelect:'none', overflowX:'auto' }}>
+    <div ref={containerRef} style={{ userSelect:'none', overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
       {/* Column headers */}
       <div style={{ display:'flex', marginLeft: labelW + 2 }}>
         {game.cols.map((v, c) => (
-          <div key={c} style={{ width:cellW, textAlign:'center', fontFamily:'Bebas Neue,sans-serif', fontSize:13, letterSpacing:1, color:'#55cc88', lineHeight:'26px', flexShrink:0 }}>{v}</div>
+          <div key={c} style={{ width:cellW, textAlign:'center', fontFamily:'Bebas Neue,sans-serif', fontSize:Math.max(9, cellW > 55 ? 12 : 9), letterSpacing:0.5, color:'#55cc88', lineHeight:'22px', flexShrink:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', padding:'0 2px' }}>{v}</div>
         ))}
       </div>
       {/* Rows */}
       {game.rows.map((rowLabel, r) => (
         <div key={r} style={{ display:'flex', alignItems:'center' }}>
-          <div style={{ width:labelW, textAlign:'right', paddingRight:8, fontFamily:'Bebas Neue,sans-serif', fontSize:12, letterSpacing:1, color:'#66aaee', flexShrink:0, lineHeight:cellH+'px' }}>
+          <div style={{ width:labelW, textAlign:'right', paddingRight:6, fontFamily:'Bebas Neue,sans-serif', fontSize:Math.max(9, labelW > 70 ? 12 : 10), letterSpacing:0.5, color:'#66aaee', flexShrink:0, lineHeight:cellH+'px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {rowLabel}
           </div>
           <div style={{ display:'flex', gap:2 }}>
@@ -172,42 +300,42 @@ function LearnGrid({ board, game, shipMap = {}, onCellClick, onCellHover, onCell
               if (v==='preview-valid')   { bg='rgba(0,212,255,.2)'; bc='#00d4ff'; content=null }
               if (v==='preview-invalid') { bg='rgba(255,58,58,.2)'; bc='#ff3a3a'; content=null }
 
-              // OVA colored cells: 'hit-N', 'miss-N', 'sunk-N'
+              // OVA colored: 'hit-N', 'miss-N', 'sunk-N'
               const ovaMatch = v && ovaColorMap && v.match(/^(miss|hit|sunk)-(\d+)$/)
               if (ovaMatch) {
                 const [, type, idx] = ovaMatch
                 const oc = OVA_TEAM_COLORS[parseInt(idx) % OVA_TEAM_COLORS.length]
-                if (type==='miss') { bg=oc.miss; bc=oc.border; content=<span style={{color:oc.color,fontSize:20,lineHeight:1}}>·</span> }
-                if (type==='hit')  { bg=oc.hit;  bc=oc.border; content=<span style={{color:oc.color,fontSize:15,fontWeight:'bold'}}>✕</span> }
-                if (type==='sunk') { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:15}}>✕</span> }
-              }
-              // Local team colored cells: 'hit-t1', 'miss-t1', 'sunk-t1', etc.
-              else if (!ovaMatch && v) {
+                if (type==='miss') { bg=oc.miss; bc=oc.border; content=<span style={{color:oc.color,fontSize:cellH>45?20:14,lineHeight:1}}>·</span> }
+                if (type==='hit')  { bg=oc.hit;  bc=oc.border; content=<span style={{color:oc.color,fontSize:cellH>45?15:11,fontWeight:'bold'}}>✕</span> }
+                if (type==='sunk') { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:cellH>45?15:11}}>✕</span> }
+              } else if (v) {
                 const localMatch = v.match(/^(miss|hit|sunk)-(t[12])$/)
                 if (localMatch) {
                   const [, type, team] = localMatch
                   const lc = team==='t1' ? LOCAL_TEAM_COLORS[0] : LOCAL_TEAM_COLORS[1]
-                  if (type==='miss') { bg=lc.miss; bc=lc.border; content=<span style={{color:lc.color,fontSize:20,lineHeight:1}}>·</span> }
-                  if (type==='hit')  { bg=lc.hit;  bc=lc.border; content=<span style={{color:lc.color,fontSize:15,fontWeight:'bold'}}>✕</span> }
-                  if (type==='sunk') { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:15}}>✕</span> }
+                  if (type==='miss') { bg=lc.miss; bc=lc.border; content=<span style={{color:lc.color,fontSize:cellH>45?20:14,lineHeight:1}}>·</span> }
+                  if (type==='hit')  { bg=lc.hit;  bc=lc.border; content=<span style={{color:lc.color,fontSize:cellH>45?15:11,fontWeight:'bold'}}>✕</span> }
+                  if (type==='sunk') { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:cellH>45?15:11}}>✕</span> }
                 } else {
-                  if (v==='miss')  { bg=th.missBg||'#0a2a4a'; bc=th.cellBorder||'#1a5a8a'; content=<span style={{color:'#4a9abb',fontSize:20,lineHeight:1}}>·</span> }
-                  if (v==='hit')   { bg=th.hitBg||'#4a1800'; bc='#cc5500'; content=<span style={{color:'#ff6600',fontSize:15}}>✕</span> }
-                  if (v==='sunk')  { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:15}}>✕</span> }
+                  if (v==='miss')  { bg=th.missBg||'#0a2a4a'; bc=th.cellBorder||'#1a5a8a'; content=<span style={{color:'#4a9abb',fontSize:cellH>45?20:14,lineHeight:1}}>·</span> }
+                  if (v==='hit')   { bg=th.hitBg||'#4a1800'; bc='#cc5500'; content=<span style={{color:'#ff6600',fontSize:cellH>45?15:11}}>✕</span> }
+                  if (v==='sunk')  { bg='#2e0000'; bc='#880000'; content=<span style={{color:'#ff3333',fontSize:cellH>45?15:11}}>✕</span> }
                 }
               }
 
               const hint = (!v && !shipId && interactive)
-                ? <span style={{fontSize:8,color:'#1a3a5c',fontFamily:'Share Tech Mono,monospace',textAlign:'center',padding:'0 2px',lineHeight:1.3}}>
-                    {colLabel.substring(0,6)}<br/>{rowLabel.substring(0,6)}
+                ? <span style={{fontSize:7,color:'#1a3a5c',fontFamily:'Share Tech Mono,monospace',textAlign:'center',padding:'0 1px',lineHeight:1.2}}>
+                    {colLabel.substring(0,5)}<br/>{rowLabel.substring(0,5)}
                   </span>
                 : null
+
               return (
                 <div key={c}
                   onClick={()=>interactive&&onCellClick?.(r,c)}
                   onMouseEnter={()=>interactive&&onCellHover?.(r,c)}
                   onMouseLeave={()=>interactive&&onCellLeave?.()}
-                  style={{ width:cellW, height:cellH, background:bg, border:`2px solid ${bc}`, cursor:interactive?'crosshair':'default', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .1s', flexShrink:0, overflow:'hidden', position:'relative' }}
+                  onTouchEnd={(e)=>{ if(interactive&&onCellClick){ e.preventDefault(); onCellClick(r,c) } }}
+                  style={{ width:cellW, height:cellH, background:bg, border:`2px solid ${bc}`, cursor:interactive?'crosshair':'default', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .1s', flexShrink:0, overflow:'hidden', position:'relative', touchAction:'manipulation' }}
                 >{content||hint}</div>
               )
             })}
@@ -601,44 +729,49 @@ export default function LearnPage() {
     const dispBoard = buildPlacementBoard()
     const shipMap   = buildShipMap(placed)
     const curShip   = gameShips[shipIdx]
+    const isMobile  = typeof window !== 'undefined' && window.innerWidth < 640
     return (
-      <div style={{padding:'20px 24px',maxWidth:1200,margin:'0 auto',position:'relative',zIndex:1}}>
+      <div style={{padding: isMobile ? '12px' : '20px 24px', maxWidth:1200, margin:'0 auto', position:'relative', zIndex:1}}>
         {/* Header */}
-        <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:16,flexWrap:'wrap'}}>
-          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:'#00d4ff'}}>
-            PLACEMENT — {placingTeam===1?team1.toUpperCase():team2.toUpperCase()}
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12,flexWrap:'wrap'}}>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 17 : 22,letterSpacing:3,color:'#00d4ff'}}>
+            PLACEMENT — {(mode==='one-vs-all'?defenderName:placingTeam===1?team1:team2).toUpperCase()}
           </div>
-          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090'}}>CLIQUEZ · [R] PIVOTER</div>
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090'}}>
+            {isMobile ? 'TAP · BOUTON ↻' : 'CLIC · [R] PIVOTER'}
+          </div>
         </div>
 
-        {/* Main layout — palette LEFT, grid RIGHT, always side by side */}
-        <div style={{display:'grid',gridTemplateColumns:'180px 1fr',gap:16,alignItems:'start'}}>
+        {/* Mobile: stack grid on top, palette below — Desktop: side by side */}
+        <div style={{display: isMobile ? 'flex' : 'grid', flexDirection: isMobile ? 'column' : undefined, gridTemplateColumns: isMobile ? undefined : '180px 1fr', gap:12, alignItems:'start'}}>
 
-          {/* LEFT — Ship palette */}
-          <div className="card" style={{padding:14}}>
-            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:13,letterSpacing:3,color:'#00d4ff',marginBottom:10,paddingBottom:8,borderBottom:'1px solid #1a3a5c'}}>FLOTTE</div>
-            {gameShips.map((s,i)=>{
-              const p=!!placed.find(p=>p.id===s.id),a=i===shipIdx&&!p,st=SHIP_STYLES[s.id]||SHIP_STYLES.patrol
-              return (
-                <div key={s.id} onClick={()=>!p&&setShipIdx(i)}
-                  style={{display:'flex',alignItems:'center',gap:8,padding:'7px 8px',marginBottom:4,border:a?`1px solid ${st.border}`:'1px solid transparent',background:a?st.bg:'transparent',opacity:p?.35:1,cursor:p?'not-allowed':'pointer',transition:'all .15s',borderRadius:2}}>
-                  <div style={{display:'flex',gap:2,flexShrink:0}}>{Array(s.size).fill(0).map((_,j)=><div key={j} style={{width:11,height:11,background:st.bg,border:`1px solid ${st.border}`}}/>)}</div>
-                  <div style={{minWidth:0}}>
-                    <div style={{fontSize:11,color:p?'#4a7090':st.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{st.label} {s.name}</div>
-                    <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090'}}>{s.size} cases{p?' ✓':''}</div>
+          {/* On desktop: palette LEFT — on mobile: palette BOTTOM */}
+          {!isMobile && (
+            <div className="card" style={{padding:14}}>
+              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:13,letterSpacing:3,color:'#00d4ff',marginBottom:10,paddingBottom:8,borderBottom:'1px solid #1a3a5c'}}>FLOTTE</div>
+              {gameShips.map((s,i)=>{
+                const p=!!placed.find(p=>p.id===s.id), a=i===shipIdx&&!p, st=SHIP_STYLES[s.id]||SHIP_STYLES.patrol
+                return (
+                  <div key={s.id} onClick={()=>!p&&setShipIdx(i)}
+                    style={{display:'flex',alignItems:'center',gap:8,padding:'7px 8px',marginBottom:4,border:a?`1px solid ${st.border}`:'1px solid transparent',background:a?st.bg:'transparent',opacity:p?.35:1,cursor:p?'not-allowed':'pointer',transition:'all .15s'}}>
+                    <div style={{width:40,height:24,flexShrink:0}}>{(SHIP_SVG[s.id]||SHIP_SVG.patrol)(st.color)}</div>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontSize:11,color:p?'#4a7090':st.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{st.label} {s.name}</div>
+                      <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090'}}>{s.size} cases{p?' ✓':''}</div>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-            <div style={{borderTop:'1px solid #1a3a5c',marginTop:8,paddingTop:8,display:'flex',flexDirection:'column',gap:5}}>
-              <button className="btn sm" style={{fontSize:10,padding:'4px 8px'}} onClick={()=>setOrientation(o=>o==='H'?'V':'H')}>↻ {orientation==='H'?'H':'V'}</button>
-              <button className="btn sm" style={{fontSize:10,padding:'4px 8px'}} onClick={()=>{setPlaced(placeShipsRandomly(NR,NC,gameShips));setShipIdx(gameShips.length);setHoverBoard(null)}}>🎲 AUTO</button>
-              <button className="btn sm danger" style={{fontSize:10,padding:'4px 8px'}} onClick={()=>{setPlaced([]);setShipIdx(0);setHoverBoard(null)}}>✕</button>
+                )
+              })}
+              <div style={{borderTop:'1px solid #1a3a5c',marginTop:8,paddingTop:8,display:'flex',flexDirection:'column',gap:5}}>
+                <button className="btn sm" onClick={()=>setOrientation(o=>o==='H'?'V':'H')}>↻ {orientation==='H'?'H':'V'}</button>
+                <button className="btn sm" onClick={()=>{setPlaced(placeShipsRandomly(NR,NC,gameShips));setShipIdx(gameShips.length);setHoverBoard(null)}}>🎲 AUTO</button>
+                <button className="btn sm danger" onClick={()=>{setPlaced([]);setShipIdx(0);setHoverBoard(null)}}>✕ RESET</button>
+              </div>
+              <button className="btn primary full" style={{marginTop:8}} disabled={!allPlaced} onClick={confirmPlacement}>✔ OK</button>
             </div>
-            <button className="btn primary full" style={{marginTop:8,fontSize:12,padding:'8px'}} disabled={!allPlaced} onClick={confirmPlacement}>✔ OK</button>
-          </div>
+          )}
 
-          {/* RIGHT — Grid */}
+          {/* Grid */}
           <div>
             {curShip&&!allPlaced&&(
               <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:(SHIP_STYLES[curShip.id]||SHIP_STYLES.patrol).color,marginBottom:8,letterSpacing:1}}>
@@ -647,6 +780,32 @@ export default function LearnPage() {
             )}
             <LearnGrid board={dispBoard} game={game} shipMap={shipMap} onCellClick={onClick} onCellHover={onHover} onCellLeave={()=>setHoverBoard(null)} interactive={!allPlaced} theme={SEA_THEMES[equippedTheme]||SEA_THEMES.default} shipSkin={SHIP_SKINS[equippedSkin]||SHIP_SKINS.default}/>
           </div>
+
+          {/* Mobile: palette below grid */}
+          {isMobile && (
+            <div className="card" style={{padding:12,marginTop:8}}>
+              {/* Ship selector as horizontal scroll row */}
+              <div style={{display:'flex',gap:8,overflowX:'auto',WebkitOverflowScrolling:'touch',paddingBottom:8,marginBottom:8,borderBottom:'1px solid #1a3a5c'}}>
+                {gameShips.map((s,i)=>{
+                  const p=!!placed.find(p=>p.id===s.id), a=i===shipIdx&&!p, st=SHIP_STYLES[s.id]||SHIP_STYLES.patrol
+                  return (
+                    <div key={s.id} onClick={()=>!p&&setShipIdx(i)}
+                      style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'8px 10px',flexShrink:0,border:a?`1px solid ${st.border}`:'1px solid #1a3a5c',background:a?st.bg:'transparent',opacity:p?.4:1,cursor:p?'not-allowed':'pointer',minWidth:64,borderRadius:4}}>
+                      <div style={{width:44,height:24}}>{(SHIP_SVG[s.id]||SHIP_SVG.patrol)(p?'#4a7090':st.color)}</div>
+                      <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:8,color:p?'#4a7090':st.color,textAlign:'center',whiteSpace:'nowrap'}}>{p?'✓':s.name}</div>
+                    </div>
+                  )
+                })}
+              </div>
+              {/* Actions row */}
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn sm" style={{flex:1,fontSize:11}} onClick={()=>setOrientation(o=>o==='H'?'V':'H')}>↻ {orientation}</button>
+                <button className="btn sm" style={{flex:1,fontSize:11}} onClick={()=>{setPlaced(placeShipsRandomly(NR,NC,gameShips));setShipIdx(gameShips.length);setHoverBoard(null)}}>🎲 AUTO</button>
+                <button className="btn sm danger" style={{fontSize:11}} onClick={()=>{setPlaced([]);setShipIdx(0);setHoverBoard(null)}}>✕</button>
+                <button className="btn primary sm" style={{flex:2,fontSize:11}} disabled={!allPlaced} onClick={confirmPlacement}>✔ OK</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -656,25 +815,26 @@ export default function LearnPage() {
     const isOVA   = mode==='one-vs-all'
     const isVsAI  = mode==='vs-ai'
     const isLocal = mode==='local'
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
     const ovaColor   = isOVA   ? OVA_TEAM_COLORS[ovaAttackerIdx % OVA_TEAM_COLORS.length] : null
     const localColor = isLocal ? LOCAL_TEAM_COLORS[currentTeam===1 ? 0 : 1] : null
     const accentColor = isOVA ? ovaColor.color : isLocal ? localColor.color : '#ffd700'
     const tname  = isOVA ? attackerNames[ovaAttackerIdx] : (currentTeam===1?team1:(isVsAI?'Classe':team2))
     const ename  = isOVA ? defenderName : (currentTeam===1?(isVsAI?'IA':team2):team1)
     return (
-      <div style={{padding:'20px 32px',maxWidth:1100,margin:'0 auto',position:'relative',zIndex:1}}>
-        {/* Status */}
-        <div className="card" style={{padding:'14px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
+      <div style={{padding: isMobile ? '8px' : '20px 32px',maxWidth:1100,margin:'0 auto',position:'relative',zIndex:1}}>
+        {/* Status bar */}
+        <div className="card" style={{padding: isMobile ? '10px 12px' : '14px 20px',marginBottom:10,display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
           <span className="dot" style={{background:accentColor}}/>
-          <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:accentColor}}>
-            {isOVA ? '🎯' : '⚔'} {tname.toUpperCase()} — CLIQUE ET DIS LA PHRASE !
+          <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 15 : 22,letterSpacing: isMobile ? 2 : 4,color:accentColor}}>
+            {isOVA ? '🎯' : '⚔'} {tname.toUpperCase()}
           </span>
           {isOVA && (
-            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginLeft:8}}>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
               {attackerNames.map((n,i)=>{
                 const oc = OVA_TEAM_COLORS[i % OVA_TEAM_COLORS.length]
                 return (
-                  <span key={i} style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,padding:'2px 8px',
+                  <span key={i} style={{fontFamily:'Share Tech Mono,monospace',fontSize: isMobile ? 9 : 10,padding:'2px 6px',
                     border:`1px solid ${i===ovaAttackerIdx?oc.border:'#1a3a5c'}`,
                     color:i===ovaAttackerIdx?oc.color:'#4a7090',
                     background:i===ovaAttackerIdx?oc.bg:'transparent'}}>
@@ -684,35 +844,35 @@ export default function LearnPage() {
               })}
             </div>
           )}
-          <div style={{marginLeft:'auto',display:'flex',gap:16,alignItems:'center'}}>
+          <div style={{marginLeft:'auto',display:'flex',gap: isMobile ? 8 : 16,alignItems:'center'}}>
             {isOVA ? (
-              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090'}}>
-                🛡 {defenderName} — {team1ShipsRef.current.filter(s=>!s.sunk).length} bateau(x) restant(s)
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize: isMobile ? 9 : 11,color:'#4a7090'}}>
+                🛡 {defenderName} — {team1ShipsRef.current.filter(s=>!s.sunk).length} restant(s)
               </span>
             ) : (<>
-              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:LOCAL_TEAM_COLORS[0].color}}>{team1}: {shots[0]} tir{shots[0]!==1?'s':''}</span>
-              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:isVsAI?'#4a7090':LOCAL_TEAM_COLORS[1].color}}>{isVsAI?'IA':team2}: {shots[1]} tir{shots[1]!==1?'s':''}</span>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize: isMobile ? 9 : 11,color:LOCAL_TEAM_COLORS[0].color}}>{isMobile ? shots[0]+'✦' : `${team1}: ${shots[0]} tir${shots[0]!==1?'s':''}`}</span>
+              <span style={{fontFamily:'Share Tech Mono,monospace',fontSize: isMobile ? 9 : 11,color:isVsAI?'#4a7090':LOCAL_TEAM_COLORS[1].color}}>{isMobile ? shots[1]+'✦' : `${isVsAI?'IA':team2}: ${shots[1]} tir${shots[1]!==1?'s':''}`}</span>
             </>)}
           </div>
         </div>
 
         {/* Boards */}
-        <div style={{display:'grid',gridTemplateColumns:isVsAI?'1fr 1fr':'1fr',gap:16,marginBottom:16}}>
-          <div className="card" style={{padding:20}}>
-            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:3,color:'#ff3a3a',marginBottom:isOVA?8:14,display:'flex',alignItems:'center',gap:8}}>
+        <div style={{display:'grid',gridTemplateColumns:isVsAI&&!isMobile?'1fr 1fr':'1fr',gap:10,marginBottom:10}}>
+          <div className="card" style={{padding: isMobile ? 10 : 20}}>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 12 : 15,letterSpacing:2,color:'#ff3a3a',marginBottom:isOVA?6:10,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
               <span className="dot red"/>MER {isOVA?'DU DÉFENSEUR':'ENNEMIE'} — {ename.toUpperCase()}
             </div>
             {isOVA && (
-              <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}}>
+              <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
                 {attackerNames.map((n,i) => {
                   const oc = OVA_TEAM_COLORS[i % OVA_TEAM_COLORS.length]
-                  return <span key={i} style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,padding:'2px 8px',border:`1px solid ${oc.border}`,color:oc.color,background:i===ovaAttackerIdx?oc.bg:'transparent'}}>{i===ovaAttackerIdx?'▶ ':''}{n}</span>
+                  return <span key={i} style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,padding:'2px 6px',border:`1px solid ${oc.border}`,color:oc.color,background:i===ovaAttackerIdx?oc.bg:'transparent'}}>{i===ovaAttackerIdx?'▶ ':''}{n}</span>
                 })}
               </div>
             )}
             <LearnGrid board={displayBoard} game={game} onCellClick={onCellClick} interactive={true} hideShips={true} theme={SEA_THEMES[equippedTheme]||SEA_THEMES.default} ovaColorMap={isOVA||isLocal}/>
           </div>
-          {isVsAI && (
+          {isVsAI && !isMobile && (
             <div className="card" style={{padding:20}}>
               <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:15,letterSpacing:3,color:'#00d4ff',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
                 <span className="dot green"/>MA FLOTTE — CLASSE
@@ -729,64 +889,62 @@ export default function LearnPage() {
     const { row, col, prompt, form, answer, formLabel } = challenge
     const tname = mode==='one-vs-all' ? attackerNames[ovaAttackerIdx] : (currentTeam===1?team1:team2)
     const isLatin = game.subject === 'Latin'
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
     const formColor = isLatin
       ? (form==='positive'?'#00d4ff':form==='negative'?'#aa44ff':'#ffd700')
       : (form==='positive'?'#00ff88':form==='negative'?'#ff6666':form?'#ffd700':'#00d4ff')
 
     return (
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'calc(100vh - 60px)',position:'relative',zIndex:1,padding:20}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'calc(100vh - 60px)',position:'relative',zIndex:1,padding: isMobile ? '12px 8px' : 20}}>
         <div className="fade-up" style={{maxWidth:620,width:'100%',textAlign:'center'}}>
-          <div className="card glow" style={{padding:'44px 40px',position:'relative'}}>
+          <div className="card glow" style={{padding: isMobile ? '24px 16px' : '44px 40px',position:'relative'}}>
             <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${formColor},transparent)`}}/>
 
-            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:12,color:'#4a7090',marginBottom:8,letterSpacing:2}}>{tname.toUpperCase()} — DÉFI ORAL</div>
+            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize: isMobile ? 10 : 12,color:'#4a7090',marginBottom:8,letterSpacing:2}}>{tname.toUpperCase()} — DÉFI ORAL</div>
 
-            {/* Form label — only for games with forms */}
             {formLabel && (
-              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:formColor,marginBottom:4}}>
+              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 18 : 22,letterSpacing:3,color:formColor,marginBottom:4}}>
                 {isLatin
-                  ? (form==='positive'?'🔵 SINGULIER':form==='negative'?'🟣 PLURIEL':'❓ FORME INTERROGATIVE')
-                  : (form==='positive'?'➕ FORME AFFIRMATIVE':form==='negative'?'➖ FORME NÉGATIVE':'❓ FORME INTERROGATIVE')}
+                  ? (form==='positive'?'🔵 SINGULIER':form==='negative'?'🟣 PLURIEL':'❓ INTERROGATIF')
+                  : (form==='positive'?'➕ AFFIRMATIVE':form==='negative'?'➖ NÉGATIVE':'❓ INTERROGATIF')}
               </div>
             )}
-            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:13,color:'#4a7090',marginBottom:30,letterSpacing:2}}>
+            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize: isMobile ? 10 : 13,color:'#4a7090',marginBottom: isMobile ? 16 : 30,letterSpacing:2}}>
               {isLatin
                 ? (formLabel ? 'DIS LA FORME DEMANDÉE' : 'DIS LA PHRASE À VOIX HAUTE')
                 : (formLabel ? 'DIS LA PHRASE AU PASSÉ' : 'DIS LA PHRASE À VOIX HAUTE')}
             </div>
 
-            {/* Row + Col + Cell */}
-            <div style={{display:'flex',gap:10,justifyContent:'center',alignItems:'center',flexWrap:'wrap',marginBottom:32}}>
-              <div style={{padding:'12px 20px',background:'#0e1e2e',border:'1px solid #2a4a6a',fontFamily:'Bebas Neue,sans-serif',fontSize:26,letterSpacing:3,color:'#66aaee'}}>{row}</div>
-              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:24,color:'#4a7090'}}>+</div>
-              <div style={{padding:'12px 20px',background:'#0e2a1a',border:'1px solid #339966',fontFamily:'Bebas Neue,sans-serif',fontSize:26,letterSpacing:3,color:'#55cc88'}}>{col}</div>
-              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:24,color:'#4a7090'}}>+</div>
-              <div style={{padding:'12px 20px',background:'#1a1a0e',border:'1px solid #555522',fontFamily:'Share Tech Mono,monospace',fontSize:16,color:'#bbbb55',lineHeight:1.5,maxWidth:200,textAlign:'center'}}>{prompt}</div>
+            {/* Row + Col + Cell — responsive flex */}
+            <div style={{display:'flex',gap: isMobile ? 6 : 10,justifyContent:'center',alignItems:'center',flexWrap:'wrap',marginBottom: isMobile ? 16 : 32}}>
+              <div style={{padding: isMobile ? '8px 12px' : '12px 20px',background:'#0e1e2e',border:'1px solid #2a4a6a',fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 18 : 26,letterSpacing:2,color:'#66aaee'}}>{row}</div>
+              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 18 : 24,color:'#4a7090'}}>+</div>
+              <div style={{padding: isMobile ? '8px 12px' : '12px 20px',background:'#0e2a1a',border:'1px solid #339966',fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 18 : 26,letterSpacing:2,color:'#55cc88'}}>{col}</div>
+              <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 18 : 24,color:'#4a7090'}}>+</div>
+              <div style={{padding: isMobile ? '8px 10px' : '12px 20px',background:'#1a1a0e',border:'1px solid #555522',fontFamily:'Share Tech Mono,monospace',fontSize: isMobile ? 13 : 16,color:'#bbbb55',lineHeight:1.5,maxWidth:200,textAlign:'center'}}>{prompt}</div>
             </div>
 
-            {/* Teacher answer — revealed only after validation */}
             {challengeRevealed && answer && (
-              <div style={{background:challengeRevealed==='correct'?'rgba(0,255,136,.08)':'rgba(255,58,58,.08)',border:`1px solid ${challengeRevealed==='correct'?'rgba(0,255,136,.3)':'rgba(255,58,58,.3)'}`,padding:'14px 20px',marginBottom:24,animation:'fadeUp .25s ease'}}>
+              <div style={{background:challengeRevealed==='correct'?'rgba(0,255,136,.08)':'rgba(255,58,58,.08)',border:`1px solid ${challengeRevealed==='correct'?'rgba(0,255,136,.3)':'rgba(255,58,58,.3)'}`,padding: isMobile ? '10px 14px' : '14px 20px',marginBottom:16,animation:'fadeUp .25s ease'}}>
                 <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',letterSpacing:2,marginBottom:6}}>BONNE RÉPONSE</div>
-                <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:20,letterSpacing:2,color:challengeRevealed==='correct'?'#00ff88':'#ff6666'}}>{answer}</div>
+                <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize: isMobile ? 16 : 20,letterSpacing:2,color:challengeRevealed==='correct'?'#00ff88':'#ff6666'}}>{answer}</div>
               </div>
             )}
-            {challengeRevealed && !answer && <div style={{height:4,marginBottom:24}}/>}
-            {!challengeRevealed && <div style={{height:4,marginBottom:24}}/>}
+            {(challengeRevealed && !answer) && <div style={{height:4,marginBottom:16}}/>}
+            {!challengeRevealed && <div style={{height:4,marginBottom:16}}/>}
 
-            {/* Buttons */}
             {!challengeRevealed ? (
               <div>
-                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:14}}>ÉCOUTEZ L'ÉLÈVE, PUIS VALIDEZ :</div>
-                <div style={{display:'flex',gap:16,justifyContent:'center'}}>
+                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginBottom:12}}>ÉCOUTEZ L'ÉLÈVE, PUIS VALIDEZ :</div>
+                <div style={{display:'flex',gap:10,justifyContent:'center'}}>
                   <button className="btn lg" onClick={()=>setChallengeRevealed('incorrect')}
-                    style={{borderColor:'#ff3a3a',color:'#ff3a3a',flex:1,maxWidth:220}}
+                    style={{borderColor:'#ff3a3a',color:'#ff3a3a',flex:1,padding: isMobile ? '14px 8px' : '13px 38px',fontSize: isMobile ? 13 : 15}}
                     onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,58,58,.1)'}}
                     onMouseLeave={e=>{e.currentTarget.style.background='transparent'}}>
                     ✕ INCORRECT
                   </button>
                   <button className="btn lg" onClick={()=>setChallengeRevealed('correct')}
-                    style={{borderColor:'#00ff88',color:'#00ff88',flex:1,maxWidth:220}}
+                    style={{borderColor:'#00ff88',color:'#00ff88',flex:1,padding: isMobile ? '14px 8px' : '13px 38px',fontSize: isMobile ? 13 : 15}}
                     onMouseEnter={e=>{e.currentTarget.style.background='rgba(0,255,136,.1)'}}
                     onMouseLeave={e=>{e.currentTarget.style.background='transparent'}}>
                     ✓ CORRECT
@@ -794,12 +952,12 @@ export default function LearnPage() {
                 </div>
               </div>
             ) : (
-              <button className="btn primary lg" style={{width:'100%'}} onClick={()=>resolveChallenge(challengeRevealed==='correct')}>
+              <button className="btn primary lg" style={{width:'100%',fontSize: isMobile ? 13 : 15}} onClick={()=>resolveChallenge(challengeRevealed==='correct')}>
                 {challengeRevealed==='correct'?'🎯 TIRER — CONTINUER':'💀 TOUR PERDU — CONTINUER'}
               </button>
             )}
           </div>
-          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#2a4a5a',marginTop:12}}>
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#2a4a5a',marginTop:10}}>
             INCORRECT = tour perdu · CORRECT = le tir part
           </div>
         </div>
