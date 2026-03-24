@@ -633,12 +633,15 @@ export default function GamePage() {
   async function triggerEndGame(won,finalShots) {
     unsubRef.current?.(); setWinData({won,shots:finalShots??shots}); setScreen(SCREENS.WIN)
     try {
-      if(user&&!user.isAnonymous) {
+      if(user && !user.isAnonymous) {
         await addDoc(collection(db,'games'),{players:[user.uid],winner:won?user.uid:'opponent',mode,opponentName:enemyName,shots:finalShots??shots,gridSize:gridSizeRef.current,createdAt:serverTimestamp()})
         const ref=doc(db,'users',user.uid),snap=await getDoc(ref),d=snap.exists()?snap.data():{wins:0,losses:0,coins:0}
         const coinsEarned = won ? COIN_REWARDS.win : COIN_REWARDS.loss
         await setDoc(ref,{wins:(d.wins||0)+(won?1:0),losses:(d.losses||0)+(won?0:1),coins:(d.coins||0)+coinsEarned},{merge:true})
         toast(`+${coinsEarned} 🪙`,'success')
+      } else if(user && user.isAnonymous) {
+        // Invité — pas de pièces, message explicatif
+        if(won) toast('Victoire ! Crée un compte pour gagner des 🪙','info')
       }
     } catch(e) { console.error(e) }
     if(mode==='online'&&roomId) { try { await updateDoc(doc(db,'rooms',roomId),{winner:won?playerRole:(playerRole==='host'?'guest':'host'),status:'ended'}) } catch {} }
