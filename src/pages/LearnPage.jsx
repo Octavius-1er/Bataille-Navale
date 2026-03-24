@@ -206,7 +206,7 @@ const SHIP_SVG = {
   ),
   patrol: (c='#cc88cc') => (
     <svg width="100%" height="100%" viewBox="0 0 36 18" xmlns="http://www.w3.org/2000/svg">
-      <path d="M2 15 L7 8 L29 8 L34 15 Z" fill={c+'22'} stroke={c} strokeWidth="1"}/>
+      <path d="M2 15 L7 8 L29 8 L34 15 Z" fill={c+'22'} stroke={c} strokeWidth="1"/>
       <line x1="2" y1="15" x2="34" y2="15" stroke={c} strokeWidth="0.6" opacity="0.5"/>
       <rect x="11" y="4" width="13" height="7" rx="1" fill={c+'1a'} stroke={c} strokeWidth="0.9"/>
       <line x1="17" y1="1" x2="17" y2="4" stroke={c} strokeWidth="1.2"/>
