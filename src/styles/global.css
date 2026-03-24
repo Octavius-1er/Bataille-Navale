@@ -199,3 +199,33 @@ input, select { font-family: inherit; }
   to   { opacity: 1; transform: none; }
 }
 .fade-up { animation: fadeUp .34s ease both; }
+
+/* ── Mobile responsive ──────────────────────────────── */
+@media (max-width: 640px) {
+  /* Tighten nav */
+  header { padding: 0 12px !important; }
+
+  /* Bigger touch targets */
+  .btn { min-height: 44px; padding: 10px 16px; }
+  .btn.sm { min-height: 38px; padding: 8px 12px; font-size: 11px; }
+  .btn.lg { min-height: 52px; padding: 14px 20px; }
+
+  /* Cards less padding */
+  .card { border-radius: 0; }
+
+  /* Inputs bigger for touch */
+  .field input, .field select { padding: 14px; font-size: 16px; }
+
+  /* Prevent zoom on input focus (iOS) */
+  input, select, textarea { font-size: 16px !important; }
+
+  /* Scrollable nav without scrollbar */
+  nav::-webkit-scrollbar { display: none; }
+
+  /* Touch-friendly scrolling on grids */
+  [style*="overflowX"] { -webkit-overflow-scrolling: touch; scroll-snap-type: x mandatory; }
+}
+
+@media (max-width: 400px) {
+  .btn.lg { font-size: 13px; letter-spacing: 1px; }
+}
