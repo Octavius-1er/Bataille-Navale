@@ -2,29 +2,90 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Helpers ──────────────────────────────────────────────────
+    function isAuth()  { return request.auth != null; }
+    function isOwner() { return request.auth.uid == resource.data.uid; }
+    function isAdmin() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // ── Users ─────────────────────────────────────────────────────
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read:  if isAuth();
+      allow write: if isAuth() && request.auth.uid == uid;
     }
 
+    // ── Fleets ───────────────────────────────────────────────────
     match /fleets/{fleetId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
-      allow create:      if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow read:   if isAuth() && isOwner();
+      allow create: if isAuth() && request.auth.uid == request.resource.data.uid;
+      allow update, delete: if isAuth() && isOwner();
     }
 
+    // ── Games history ─────────────────────────────────────────────
     match /games/{gameId} {
-      allow create: if request.auth != null;
-      allow read:   if request.auth != null && request.auth.uid in resource.data.players;
+      allow create: if isAuth();
+      allow read:   if isAuth() && request.auth.uid in resource.data.players;
     }
 
+    // ── Online rooms ──────────────────────────────────────────────
     match /rooms/{roomId} {
-      allow create:      if request.auth != null;
-      allow read, update: if request.auth != null;
+      allow create:       if isAuth();
+      allow read, update: if isAuth();
     }
 
+    // ── Learn games ───────────────────────────────────────────────
     match /learn_games/{gameId} {
-      allow read:   if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow read:   if isAuth();
+      allow create: if isAuth() && request.auth.uid == request.resource.data.uid;
+      allow update: if isAuth() && (isOwner() || isAdmin());
+      allow delete: if isAuth() && (isOwner() || isAdmin());
+    }
+
+    // ── Announcements — everyone reads, admins write ──────────────
+    match /announcements/{docId} {
+      allow read:   if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Events — everyone reads, admins write ─────────────────────
+    match /events/{docId} {
+      allow read:   if isAuth();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Sondages — everyone reads & votes, admins create ──────────
+    match /polls/{pollId} {
+      allow read:   if isAuth();
+      allow create, delete: if isAdmin();
+      // Anyone can update to add their vote
+      allow update: if isAuth();
+    }
+
+    // ── Inbox — user reads/claims their own, anyone creates ───────
+    match /inbox/{msgId} {
+      allow read, update: if isAuth() && request.auth.uid == resource.data.uid;
+      allow create: if isAuth();
+      allow delete: if isAdmin();
+    }
+
+    // ── Presence — each user writes their own, all read ──────────
+    match /presence/{uid} {
+      allow read:  if isAuth();
+      allow write: if isAuth() && request.auth.uid == uid;
+    }
+
+    // ── Stats / visitors counter ──────────────────────────────────
+    match /stats/{docId} {
+      allow read:           if isAuth();
+      allow create, update: if isAuth();
+    }
+
+    // ── Cutscenes — everyone reads, admins write ──────────────────
+    match /cutscenes/{docId} {
+      allow read:   if isAuth();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
