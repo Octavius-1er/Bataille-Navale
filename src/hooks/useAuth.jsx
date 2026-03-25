@@ -8,7 +8,7 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { doc, setDoc, getDoc, query, collection, where, getDocs, serverTimestamp } from 'firebase/firestore'
+import { doc, setDoc, getDoc, query, collection, where, getDocs, serverTimestamp, increment, deleteDoc } from 'firebase/firestore'
 import { auth, db } from '../lib/firebase'
 
 const AuthContext = createContext(null)
@@ -30,8 +30,60 @@ export function AuthProvider({ children }) {
           await setDoc(ref, p)
           setProfile(p)
         }
+        // ── Presence tracking ──────────────────────────────────────
+        const presRef = doc(db, 'presence', u.uid)
+        await setDoc(presRef, {
+          uid: u.uid,
+          username: u.displayName || 'Amiral',
+          isAnonymous: false,
+          online: true,
+          lastSeen: serverTimestamp(),
+        }, { merge: true })
+        // Heartbeat every 30s
+        const heartbeat = setInterval(async () => {
+          try { await setDoc(presRef, { online:true, lastSeen:serverTimestamp() }, { merge:true }) } catch {}
+        }, 30000)
+        // Mark offline on unload
+        const markOffline = () => setDoc(presRef, { online:false, lastSeen:serverTimestamp() }, { merge:true }).catch(()=>{})
+        window.addEventListener('beforeunload', markOffline)
+        // ── Total visitor counter ──────────────────────────────────
+        const visitKey = `visited_${u.uid}`
+        if (!sessionStorage.getItem(visitKey)) {
+          sessionStorage.setItem(visitKey, '1')
+          try { await setDoc(doc(db,'stats','visitors'), { total: increment(1) }, { merge:true }) } catch {}
+        }
+        return () => {
+          clearInterval(heartbeat)
+          window.removeEventListener('beforeunload', markOffline)
+          markOffline()
+        }
       } else if (u?.isAnonymous) {
         setProfile({ wins:0, losses:0, username: u.displayName || 'Invité', anonymous: true })
+        // Presence for anonymous users too
+        const presRef = doc(db, 'presence', u.uid)
+        await setDoc(presRef, {
+          uid: u.uid,
+          username: u.displayName || 'Invité',
+          isAnonymous: true,
+          online: true,
+          lastSeen: serverTimestamp(),
+        }, { merge: true })
+        const heartbeat = setInterval(async () => {
+          try { await setDoc(presRef, { online:true, lastSeen:serverTimestamp() }, { merge:true }) } catch {}
+        }, 30000)
+        const markOffline = () => setDoc(presRef, { online:false, lastSeen:serverTimestamp() }, { merge:true }).catch(()=>{})
+        window.addEventListener('beforeunload', markOffline)
+        // Count anonymous visitor too
+        const visitKey = `visited_anon_${u.uid}`
+        if (!sessionStorage.getItem(visitKey)) {
+          sessionStorage.setItem(visitKey, '1')
+          try { await setDoc(doc(db,'stats','visitors'), { total: increment(1), anonymous: increment(1) }, { merge:true }) } catch {}
+        }
+        return () => {
+          clearInterval(heartbeat)
+          window.removeEventListener('beforeunload', markOffline)
+          markOffline()
+        }
       } else {
         setProfile(null)
       }
