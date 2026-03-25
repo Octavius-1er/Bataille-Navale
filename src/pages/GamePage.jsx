@@ -225,28 +225,154 @@ export default function GamePage() {
 
   useEffect(() => () => { unsubRef.current?.() }, [])
 
-  // Disco ticker + music
-  const audioRef = useRef(null)
-  useEffect(() => {
-    if (activeEvent?.eventType !== 'disco') {
-      // Stop music if event ends
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
-      return
-    }
-    // Start disco ticker
-    const id = setInterval(() => setDiscoTick(t => t + 1), 400)
-    // Play It's Raining Tacos
+  // ── Music tracks per event ────────────────────────────────────
+  const MUSIC_TRACKS = {
+    disco:    [
+      { url:'https://ia800501.us.archive.org/8/items/CrabRave_Noisestorm/Crab%20Rave.mp3', label:'Crab Rave 🦀' },
+    ],
+    pirates:  [
+      { url:'https://ia800303.us.archive.org/21/items/FightingForFreedom_939/FightingForFreedom.mp3', label:'Fighting for Freedom ⚔️' },
+      { url:'https://ia600300.us.archive.org/17/items/TheAdventurer_917/TheAdventurer.mp3', label:'The Adventurer 🗺️' },
+    ],
+    tempete:  [
+      { url:'https://ia800504.us.archive.org/15/items/StormWarning_935/StormWarning.mp3', label:'Storm Warning ⚡' },
+    ],
+    halloween:[
+      { url:'https://ia800304.us.archive.org/22/items/ToccataAndFugue_946/ToccataAndFugue.mp3', label:'Toccata & Fugue 🎃' },
+    ],
+    karaoke:  [
+      { url:'https://ia800501.us.archive.org/8/items/CrabRave_Noisestorm/Crab%20Rave.mp3', label:'Crab Rave 🦀' },
+      { url:'https://ia800303.us.archive.org/21/items/FightingForFreedom_939/FightingForFreedom.mp3', label:'Fighting for Freedom ⚔️' },
+      { url:'https://ia800304.us.archive.org/22/items/ToccataAndFugue_946/ToccataAndFugue.mp3', label:'Toccata & Fugue 🎃' },
+    ],
+    notes:    [], // no background music — only sound effects
+  }
+
+  // ── Audio refs & state ─────────────────────────────────────────
+  const audioRef        = useRef(null)
+  const audioCtxRef     = useRef(null)
+  const [musicMuted,    setMusicMuted]    = useState(false)
+  const [musicVolume,   setMusicVolume]   = useState(0.35)
+  const [currentTrack,  setCurrentTrack]  = useState(0)
+  const [karaokeVotes,  setKaraokeVotes]  = useState({}) // trackIdx -> count
+  const [showKaraoke,   setShowKaraoke]   = useState(false)
+  const [noteFlash,     setNoteFlash]     = useState(null) // note name for visual
+
+  // ── Play a note via Web Audio API (for 'notes' event) ─────────
+  function playNote(r, c) {
     try {
-      audioRef.current = new Audio('https://ia803401.us.archive.org/14/items/ItsRainingTacos_201903/Its%20Raining%20Tacos.mp3')
-      audioRef.current.volume = 0.4
-      audioRef.current.loop = true
-      audioRef.current.play().catch(()=>{}) // ignore autoplay policy errors
+      if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+      const ctx = audioCtxRef.current
+      // Map cell position to musical scale (C major pentatonic)
+      const SCALE = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00]
+      const NOTE_NAMES = ['Do', 'Ré', 'Mi', 'Sol', 'La', 'Do²', 'Ré²', 'Mi²', 'Sol²', 'La²']
+      const freq = SCALE[(r + c) % SCALE.length]
+      const noteName = NOTE_NAMES[(r + c) % NOTE_NAMES.length]
+
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc.frequency.value = freq
+      osc.type = 'sine'
+      gain.gain.setValueAtTime(0.5, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
+      osc.start(); osc.stop(ctx.currentTime + 0.8)
+      setNoteFlash(noteName)
+      setTimeout(() => setNoteFlash(null), 600)
     } catch {}
-    return () => {
-      clearInterval(id)
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+  }
+
+  // ── Play event ambience sounds ──────────────────────────────────
+  function playAmbience(eventType) {
+    try {
+      if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+      const ctx = audioCtxRef.current
+      if (eventType === 'tempete') {
+        // Thunder rumble
+        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate)
+        const data = buf.getChannelData(0)
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.15))
+        const src = ctx.createBufferSource(); src.buffer = buf
+        const gain = ctx.createGain(); gain.gain.value = 0.3
+        src.connect(gain); gain.connect(ctx.destination); src.start()
+      } else if (eventType === 'halloween') {
+        // Spooky arpeggio
+        const notes = [220, 261, 311, 370]
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator(), gain = ctx.createGain()
+          osc.connect(gain); gain.connect(ctx.destination)
+          osc.frequency.value = freq; osc.type = 'sawtooth'
+          gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.1)
+          gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + i * 0.1 + 0.05)
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.4)
+          osc.start(ctx.currentTime + i * 0.1)
+          osc.stop(ctx.currentTime + i * 0.1 + 0.4)
+        })
+      }
+    } catch {}
+  }
+
+  // ── Start / stop background music ──────────────────────────────
+  function startMusic(eventType, trackIdx = 0) {
+    stopMusic()
+    const tracks = MUSIC_TRACKS[eventType]
+    if (!tracks || tracks.length === 0) return
+    const track = tracks[trackIdx % tracks.length]
+    try {
+      audioRef.current = new Audio(track.url)
+      audioRef.current.volume = musicMuted ? 0 : musicVolume
+      audioRef.current.loop = true
+      audioRef.current.play().catch(() => {})
+    } catch {}
+  }
+
+  function stopMusic() {
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+  }
+
+  // ── Event music effect ──────────────────────────────────────────
+  const evType = activeEvent?.eventType
+  useEffect(() => {
+    const musicEvents = ['disco','pirates','tempete','halloween','karaoke']
+    if (!evType || !musicEvents.includes(evType)) { stopMusic(); return }
+    if (evType === 'disco') {
+      const id = setInterval(() => setDiscoTick(t => t + 1), 400)
+      startMusic('disco', 0)
+      return () => { clearInterval(id); stopMusic() }
     }
-  }, [activeEvent?.eventType])
+    startMusic(evType, currentTrack)
+    return () => stopMusic()
+  }, [evType])
+
+  // Volume/mute control
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = musicMuted ? 0 : musicVolume
+  }, [musicMuted, musicVolume])
+
+  // Karaoke track switch
+  useEffect(() => {
+    if (evType === 'karaoke' && audioRef.current) startMusic('karaoke', currentTrack)
+  }, [currentTrack])
+
+  // Karaoke vote result — most voted track wins every 30s
+  useEffect(() => {
+    if (evType !== 'karaoke') return
+    const id = setInterval(() => {
+      const votes = karaokeVotes
+      if (Object.keys(votes).length === 0) return
+      const winner = Object.entries(votes).sort((a,b) => b[1]-a[1])[0][0]
+      setCurrentTrack(parseInt(winner))
+      setKaraokeVotes({})
+    }, 30000)
+    return () => clearInterval(id)
+  }, [evType, karaokeVotes])
+
+  // Disco ticker
+  useEffect(() => {
+    if (evType !== 'disco') return
+    const id = setInterval(() => setDiscoTick(t => t + 1), 400)
+    return () => clearInterval(id)
+  }, [evType])
 
   // Generate fog cells when event is fog
   useEffect(() => {
@@ -546,6 +672,10 @@ export default function GamePage() {
     if(result==='sunk') { addLog(coord+' — '+sunkShip.name.toUpperCase()+' COULÉ !','sunk'); toast('💥 '+sunkShip.name+' coulé !','success') }
     else if(result==='hit') { addLog(coord+' — TOUCHÉ !','hit'); toast('🎯 Touché en '+coord,'success') }
     else addLog(coord+' — À l\'eau','miss')
+    // Event sound effects
+    if (activeEvent?.eventType === 'notes') playNote(r, c)
+    if (activeEvent?.eventType === 'tempete') playAmbience('tempete')
+    if (activeEvent?.eventType === 'halloween' && result === 'sunk') playAmbience('halloween')
     // MINES effect — explode adjacent cells too
     if (activeEvent?.eventType === 'mines') {
       const adjDeltas = [[-1,0],[1,0],[0,-1],[0,1]]
@@ -633,15 +763,12 @@ export default function GamePage() {
   async function triggerEndGame(won,finalShots) {
     unsubRef.current?.(); setWinData({won,shots:finalShots??shots}); setScreen(SCREENS.WIN)
     try {
-      if(user && !user.isAnonymous) {
+      if(user&&!user.isAnonymous) {
         await addDoc(collection(db,'games'),{players:[user.uid],winner:won?user.uid:'opponent',mode,opponentName:enemyName,shots:finalShots??shots,gridSize:gridSizeRef.current,createdAt:serverTimestamp()})
         const ref=doc(db,'users',user.uid),snap=await getDoc(ref),d=snap.exists()?snap.data():{wins:0,losses:0,coins:0}
         const coinsEarned = won ? COIN_REWARDS.win : COIN_REWARDS.loss
         await setDoc(ref,{wins:(d.wins||0)+(won?1:0),losses:(d.losses||0)+(won?0:1),coins:(d.coins||0)+coinsEarned},{merge:true})
         toast(`+${coinsEarned} 🪙`,'success')
-      } else if(user && user.isAnonymous) {
-        // Invité — pas de pièces, message explicatif
-        if(won) toast('Victoire ! Crée un compte pour gagner des 🪙','info')
       }
     } catch(e) { console.error(e) }
     if(mode==='online'&&roomId) { try { await updateDoc(doc(db,'rooms',roomId),{winner:won?playerRole:(playerRole==='host'?'guest':'host'),status:'ended'}) } catch {} }
@@ -835,15 +962,89 @@ export default function GamePage() {
     const activeSkin  = SHIP_SKINS[equippedSkin]  || SHIP_SKINS.default
     return (
       <div style={{padding:'20px 28px',maxWidth:1100,margin:'0 auto',position:'relative',zIndex:1}}>
-        {/* Event banner */}
-        {activeEvent && EVENT_TYPES[activeEvent.eventType] && (
-          <div style={{marginBottom:10,padding:'8px 18px',background:`${EVENT_TYPES[activeEvent.eventType].color}15`,border:`1px solid ${EVENT_TYPES[activeEvent.eventType].color}55`,display:'flex',alignItems:'center',gap:10}}>
-            <span style={{fontSize:20}}>{EVENT_TYPES[activeEvent.eventType].icon}</span>
-            <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:16,letterSpacing:3,color:EVENT_TYPES[activeEvent.eventType].color}}>ÉVÉNEMENT : {activeEvent.title||EVENT_TYPES[activeEvent.eventType].name}</span>
-            <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',marginLeft:8}}>{EVENT_TYPES[activeEvent.eventType].desc}</span>
-            {speedTimer!==null&&<span style={{marginLeft:'auto',fontFamily:'Bebas Neue,sans-serif',fontSize:24,color:speedTimer<=3?'#ff3a3a':'#ffd700',letterSpacing:2}}>⏱ {speedTimer}s</span>}
-          </div>
-        )}
+        {/* Event banner — rich with music controls */}
+        {activeEvent && EVENT_TYPES[activeEvent.eventType] && (() => {
+          const et = EVENT_TYPES[activeEvent.eventType]
+          const tracks = MUSIC_TRACKS[activeEvent.eventType] || []
+          return (
+            <div style={{marginBottom:10,background:`${et.color}12`,border:`1px solid ${et.color}55`,overflow:'hidden'}}>
+              {/* Main bar */}
+              <div style={{padding:'8px 16px',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+                <span style={{fontSize:20}}>{et.icon}</span>
+                <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:16,letterSpacing:3,color:et.color}}>
+                  ÉVÉNEMENT : {activeEvent.title||et.name}
+                </span>
+                <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090'}}>{et.desc}</span>
+                {et.interactive && <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:et.color,border:`1px solid ${et.color}55`,padding:'1px 6px'}}>INTERACTIF</span>}
+                {speedTimer!==null&&<span style={{marginLeft:'auto',fontFamily:'Bebas Neue,sans-serif',fontSize:24,color:speedTimer<=3?'#ff3a3a':'#ffd700',letterSpacing:2}}>⏱ {speedTimer}s</span>}
+
+                {/* Music controls */}
+                {et.music && tracks.length > 0 && (
+                  <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090'}}>
+                      🎵 {tracks[currentTrack % tracks.length]?.label}
+                    </span>
+                    <button onClick={()=>setMusicMuted(m=>!m)} style={{background:'none',border:`1px solid ${et.color}44`,color:musicMuted?'#4a7090':et.color,padding:'2px 8px',cursor:'pointer',fontFamily:'Share Tech Mono,monospace',fontSize:9}}>
+                      {musicMuted?'🔇':'🔊'}
+                    </button>
+                    <input type="range" min="0" max="1" step="0.05" value={musicMuted?0:musicVolume}
+                      onChange={e=>{setMusicVolume(parseFloat(e.target.value));setMusicMuted(false)}}
+                      style={{width:60,accentColor:et.color}}/>
+                    {activeEvent.eventType==='karaoke' && (
+                      <button onClick={()=>setShowKaraoke(k=>!k)} style={{background:showKaraoke?`${et.color}22`:'none',border:`1px solid ${et.color}`,color:et.color,padding:'2px 10px',cursor:'pointer',fontFamily:'Share Tech Mono,monospace',fontSize:9}}>
+                        🗳️ VOTER
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Notes event — flash */}
+                {activeEvent.eventType==='notes' && noteFlash && (
+                  <div style={{marginLeft:'auto',fontFamily:'Bebas Neue,sans-serif',fontSize:28,letterSpacing:4,color:'#00ff88',animation:'fadeUp .2s ease'}}>
+                    ♪ {noteFlash}
+                  </div>
+                )}
+              </div>
+
+              {/* Karaoke vote panel */}
+              {activeEvent.eventType==='karaoke' && showKaraoke && (
+                <div style={{borderTop:`1px solid ${et.color}33`,padding:'10px 16px',display:'flex',gap:10,flexWrap:'wrap',alignItems:'center'}}>
+                  <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090'}}>VOTE LA PROCHAINE CHANSON :</span>
+                  {MUSIC_TRACKS.karaoke.map((t,i)=>{
+                    const votes = karaokeVotes[i] || 0
+                    const total = Object.values(karaokeVotes).reduce((a,b)=>a+b,0) || 1
+                    const pct = Math.round(votes/total*100)
+                    return (
+                      <button key={i} onClick={()=>{setKaraokeVotes(v=>({...v,[i]:(v[i]||0)+1}));setCurrentTrack(i)}}
+                        style={{background:currentTrack===i?`${et.color}22`:'transparent',border:`1px solid ${currentTrack===i?et.color:'#1a3a5c'}`,color:currentTrack===i?et.color:'#4a7090',padding:'4px 12px',cursor:'pointer',fontFamily:'Share Tech Mono,monospace',fontSize:9,display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+                        {t.label}
+                        <span style={{color:'#ffd700'}}>{votes} vote{votes!==1?'s':''} ({pct}%)</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Pirates theme — special flavor text */}
+              {activeEvent.eventType==='pirates' && (
+                <div style={{borderTop:`1px solid ${et.color}22`,padding:'4px 16px',fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#cc8800',fontStyle:'italic'}}>
+                  🏴‍☠️ "Celui qui contrôle les mers contrôle le monde..." — Barbe-Noire
+                </div>
+              )}
+              {/* Halloween — spooky ticker */}
+              {activeEvent.eventType==='halloween' && (
+                <div style={{borderTop:`1px solid ${et.color}22`,padding:'4px 16px',fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#ff6600',animation:'blink 1.5s infinite'}}>
+                  🎃 Les morts se réveillent... chaque bateau coulé réveille un fantôme !
+                </div>
+              )}
+              {/* Tempête — lightning animation hint */}
+              {activeEvent.eventType==='tempete' && (
+                <div style={{borderTop:`1px solid ${et.color}22`,padding:'4px 16px',fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#00aaff'}}>
+                  ⛈️ La tempête fait rage — écoutez le tonnerre à chaque tir !
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         <div className="card" style={{padding:'12px 18px',marginBottom:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
           <span className={isMyTurn?'dot gold':'dot dim'}/>
