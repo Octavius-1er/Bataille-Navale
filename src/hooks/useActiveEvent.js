@@ -18,6 +18,7 @@ export const EVENT_TYPES = {
   halloween:  { id:'halloween',  icon:'🎃', name:'HALLOWEEN',        color:'#ff6600', desc:'Atmosphère lugubre, sons de fantômes et citrouilles !', music:true },
   karaoke:    { id:'karaoke',    icon:'🎤', name:'KARAOKÉ NAVAL',    color:'#ff44aa', desc:'INTERACTIF — Vote pour la prochaine chanson !',     music:true,  interactive:true },
   notes:      { id:'notes',      icon:'🎹', name:'BATTLE MUSICALE',  color:'#00ff88', desc:'INTERACTIF — Chaque tir joue une note de musique !', music:true, interactive:true },
+  sondage:    { id:'sondage',    icon:'📊', name:'SONDAGE',          color:'#00d4ff', desc:'INTERACTIF — Vote en temps réel pour toute la classe !', interactive:true },
 }
 
 export function useActiveEvent() {
