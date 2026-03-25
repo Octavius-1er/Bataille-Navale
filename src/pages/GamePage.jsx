@@ -226,26 +226,90 @@ export default function GamePage() {
   useEffect(() => () => { unsubRef.current?.() }, [])
 
   // ── Music tracks per event ────────────────────────────────────
+  // Disco = Crab Rave via URL. Autres = Web Audio API procédurale.
   const MUSIC_TRACKS = {
-    disco:    [
-      { url:'https://ia800501.us.archive.org/8/items/CrabRave_Noisestorm/Crab%20Rave.mp3', label:'Crab Rave 🦀' },
-    ],
-    pirates:  [
-      { url:'https://ia800303.us.archive.org/21/items/FightingForFreedom_939/FightingForFreedom.mp3', label:'Fighting for Freedom ⚔️' },
-      { url:'https://ia600300.us.archive.org/17/items/TheAdventurer_917/TheAdventurer.mp3', label:'The Adventurer 🗺️' },
-    ],
-    tempete:  [
-      { url:'https://ia800504.us.archive.org/15/items/StormWarning_935/StormWarning.mp3', label:'Storm Warning ⚡' },
-    ],
-    halloween:[
-      { url:'https://ia800304.us.archive.org/22/items/ToccataAndFugue_946/ToccataAndFugue.mp3', label:'Toccata & Fugue 🎃' },
-    ],
-    karaoke:  [
-      { url:'https://ia800501.us.archive.org/8/items/CrabRave_Noisestorm/Crab%20Rave.mp3', label:'Crab Rave 🦀' },
-      { url:'https://ia800303.us.archive.org/21/items/FightingForFreedom_939/FightingForFreedom.mp3', label:'Fighting for Freedom ⚔️' },
-      { url:'https://ia800304.us.archive.org/22/items/ToccataAndFugue_946/ToccataAndFugue.mp3', label:'Toccata & Fugue 🎃' },
-    ],
-    notes:    [], // no background music — only sound effects
+    disco:     [{ url:'https://ia803400.us.archive.org/5/items/crab-rave-noisestorm/Crab%20Rave%20-%20Noisestorm.mp3', label:'Crab Rave 🦀', proc:false }],
+    pirates:   [{ url:null, label:'Shanty Pirate 🏴‍☠️',   proc:'pirates'   }],
+    tempete:   [{ url:null, label:'Tempête Épique ⛈️',   proc:'tempete'   }],
+    halloween: [{ url:null, label:'Spooky Organ 🎃',      proc:'halloween' }],
+    karaoke:   [{ url:null, label:'Karaoké Entraînant 🎤', proc:'karaoke'  }],
+    notes: [],
+  }
+
+  // ── Web Audio procédurale ──────────────────────────────────────
+  const procStopRef = useRef(null)
+
+  function stopProcMusic() {
+    if (procStopRef.current) { try { procStopRef.current() } catch {} procStopRef.current = null }
+  }
+
+  function getAudioCtx() {
+    if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+    return audioCtxRef.current
+  }
+
+  function startProcMusic(type) {
+    stopProcMusic()
+    try {
+      const ctx = getAudioCtx()
+      if (ctx.state === 'suspended') ctx.resume()
+      const master = ctx.createGain(); master.gain.value = musicMuted ? 0 : musicVolume * 0.6; master.connect(ctx.destination)
+
+      if (type === 'pirates') {
+        const notes = [261,293,329,261,261,293,329,261,329,349,392,329,349,392,392,440,392,349,329,261]
+        let i = 0
+        const id = setInterval(() => {
+          const osc = ctx.createOscillator(), g = ctx.createGain()
+          osc.type = 'sawtooth'; osc.frequency.value = notes[i % notes.length]
+          g.gain.setValueAtTime(0.3, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
+          osc.connect(g); g.connect(master); osc.start(); osc.stop(ctx.currentTime + 0.38)
+          if (i % 4 === 0) { const d = ctx.createOscillator(), dg = ctx.createGain(); d.type='square'; d.frequency.value=80; dg.gain.setValueAtTime(0.4,ctx.currentTime); dg.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.1); d.connect(dg); dg.connect(master); d.start(); d.stop(ctx.currentTime+0.1) }
+          i++
+        }, 380)
+        procStopRef.current = () => clearInterval(id)
+
+      } else if (type === 'tempete') {
+        const drone = ctx.createOscillator(), dg = ctx.createGain()
+        drone.type = 'sawtooth'; drone.frequency.value = 55; dg.gain.value = 0.15
+        drone.connect(dg); dg.connect(master); drone.start()
+        const chords = [[261,329,392],[220,277,349],[196,247,311],[174,220,261]]
+        let ci = 0
+        const id = setInterval(() => {
+          chords[ci % chords.length].forEach((f, j) => {
+            const o = ctx.createOscillator(), g = ctx.createGain(); o.type='triangle'; o.frequency.value=f
+            g.gain.setValueAtTime(0, ctx.currentTime + j*0.08); g.gain.linearRampToValueAtTime(0.2, ctx.currentTime + j*0.08+0.05); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.65)
+            o.connect(g); g.connect(master); o.start(ctx.currentTime+j*0.08); o.stop(ctx.currentTime+0.7)
+          }); ci++
+        }, 700)
+        procStopRef.current = () => { clearInterval(id); try { drone.stop() } catch {} }
+
+      } else if (type === 'halloween') {
+        const mel = [440,466,415,440,415,392,440,415,392,370,392,415,440,493,440]
+        let i = 0
+        const id = setInterval(() => {
+          [1, 2].forEach(oct => {
+            const o = ctx.createOscillator(), g = ctx.createGain()
+            o.type = oct===1 ? 'square' : 'sine'; o.frequency.value = mel[i%mel.length] / oct
+            g.gain.setValueAtTime(oct===1?0.22:0.14, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.17)
+            o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+0.18)
+          }); i++
+        }, 180)
+        procStopRef.current = () => clearInterval(id)
+
+      } else if (type === 'karaoke') {
+        const mel = [523,587,659,698,784,698,659,587,523,494,523,587,659,523]
+        let i = 0
+        const id = setInterval(() => {
+          const o = ctx.createOscillator(), g = ctx.createGain()
+          o.type='sine'; o.frequency.value=mel[i%mel.length]
+          g.gain.setValueAtTime(0.28, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.25)
+          o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+0.28)
+          if (i%2===0) { const b=ctx.createOscillator(), bg=ctx.createGain(); b.type='triangle'; b.frequency.value=mel[i%mel.length]/4; bg.gain.setValueAtTime(0.18,ctx.currentTime); bg.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.28); b.connect(bg); bg.connect(master); b.start(); b.stop(ctx.currentTime+0.28) }
+          i++
+        }, 280)
+        procStopRef.current = () => clearInterval(id)
+      }
+    } catch(e) { console.warn('Web Audio error:', e) }
   }
 
   // ── Audio refs & state ─────────────────────────────────────────
@@ -315,15 +379,20 @@ export default function GamePage() {
   // ── Start / stop background music ──────────────────────────────
   function startMusic(eventType, trackIdx = 0) {
     stopMusic()
+    stopProcMusic()
     const tracks = MUSIC_TRACKS[eventType]
     if (!tracks || tracks.length === 0) return
     const track = tracks[trackIdx % tracks.length]
-    try {
-      audioRef.current = new Audio(track.url)
-      audioRef.current.volume = musicMuted ? 0 : musicVolume
-      audioRef.current.loop = true
-      audioRef.current.play().catch(() => {})
-    } catch {}
+    if (track.proc) {
+      startProcMusic(track.proc)
+    } else if (track.url) {
+      try {
+        audioRef.current = new Audio(track.url)
+        audioRef.current.volume = musicMuted ? 0 : musicVolume
+        audioRef.current.loop = true
+        audioRef.current.play().catch(() => {})
+      } catch {}
+    }
   }
 
   function stopMusic() {
@@ -334,14 +403,14 @@ export default function GamePage() {
   const evType = activeEvent?.eventType
   useEffect(() => {
     const musicEvents = ['disco','pirates','tempete','halloween','karaoke']
-    if (!evType || !musicEvents.includes(evType)) { stopMusic(); return }
+    if (!evType || !musicEvents.includes(evType)) { stopMusic(); stopProcMusic(); return }
     if (evType === 'disco') {
       const id = setInterval(() => setDiscoTick(t => t + 1), 400)
       startMusic('disco', 0)
       return () => { clearInterval(id); stopMusic() }
     }
     startMusic(evType, currentTrack)
-    return () => stopMusic()
+    return () => { stopMusic(); stopProcMusic() }
   }, [evType])
 
   // Volume/mute control
