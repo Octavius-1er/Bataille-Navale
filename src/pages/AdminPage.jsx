@@ -11,7 +11,7 @@ import { EVENT_TYPES } from '../hooks/useActiveEvent'
 import { ALL_ITEMS, SHIP_SKINS, SEA_THEMES, RARITY, PACKS, openPack } from '../lib/shopData'
 import { useToast } from '../components/Toast'
 
-const TAB = { USERS:'users', GAMES:'games', LEARN:'learn', ANNOUNCE:'announce', EVENTS:'events', SPECTATE:'spectate', STATS:'stats', MASSGIFT:'massgift', CUTSCENE:'cutscene', GUEST:'guest' }
+const TAB = { USERS:'users', GAMES:'games', LEARN:'learn', ANNOUNCE:'announce', EVENTS:'events', POLL:'poll', SPECTATE:'spectate', STATS:'stats', MASSGIFT:'massgift', CUTSCENE:'cutscene', GUEST:'guest' }
 
 const tabStyle = (active) => ({
   padding:'7px 14px', fontFamily:'Bebas Neue,sans-serif', fontSize:13, letterSpacing:2,
@@ -56,6 +56,14 @@ export default function AdminPage() {
   const [evtReward,  setEvtReward]  = useState('')
   const [evtEnd,     setEvtEnd]     = useState('')
   const [evtType,    setEvtType]    = useState('disco')
+
+  // Poll state
+  const [pollQuestion, setPollQuestion] = useState('')
+  const [pollOptions,  setPollOptions]  = useState(['', '', '', ''])
+  const [pollMulti,    setPollMulti]    = useState(false)
+  const [activePoll,   setActivePoll]   = useState(null)
+  const [pollResults,  setPollResults]  = useState(null)
+  const unsubPoll = useRef(null)
 
   // Reward modal
   const [rewardUser,    setRewardUser]    = useState(null)
@@ -288,6 +296,65 @@ export default function AdminPage() {
     loadTab(TAB.EVENTS)
   }
 
+  // ── Polls ──────────────────────────────────────────────────────
+  async function createPoll() {
+    const opts = pollOptions.filter(o=>o.trim())
+    if (!pollQuestion.trim()) { toast('Entrez une question','error'); return }
+    if (opts.length < 2)      { toast('Minimum 2 options','error'); return }
+    // Close any active poll first
+    try {
+      const snap = await getDocs(query(collection(db,'polls'), where('active','==',true)))
+      for (const d of snap.docs) await updateDoc(doc(db,'polls',d.id),{active:false})
+    } catch {}
+    const ref = await addDoc(collection(db,'polls'),{
+      question: pollQuestion.trim(),
+      options: opts,
+      multi: pollMulti,
+      votes: {}, // uid -> [optionIndex,...]
+      active: true,
+      author: profile?.username||'Admin',
+      createdAt: serverTimestamp(),
+    })
+    // Optionally create a 'sondage' event too
+    toast('Sondage lancé !','success')
+    setPollQuestion(''); setPollOptions(['','','','']); setPollMulti(false)
+    listenPoll(ref.id)
+  }
+
+  function listenPoll(pollId) {
+    unsubPoll.current?.()
+    unsubPoll.current = onSnapshot(doc(db,'polls',pollId), snap => {
+      if (!snap.exists()) return
+      const data = {id:snap.id,...snap.data()}
+      setActivePoll(data)
+      // Tally results
+      const tally = {}
+      data.options.forEach((_,i)=>{ tally[i]=0 })
+      Object.values(data.votes||{}).forEach(v => {
+        const arr = Array.isArray(v) ? v : [v]
+        arr.forEach(i => { tally[i] = (tally[i]||0)+1 })
+      })
+      setPollResults(tally)
+    })
+  }
+
+  async function closePoll() {
+    if (!activePoll) return
+    await updateDoc(doc(db,'polls',activePoll.id),{active:false})
+    toast('Sondage terminé','info')
+    setActivePoll(null); setPollResults(null)
+    unsubPoll.current?.()
+  }
+
+  async function loadActivePoll() {
+    try {
+      const snap = await getDocs(query(collection(db,'polls'), where('active','==',true), limit(1)))
+      if (!snap.empty) listenPoll(snap.docs[0].id)
+    } catch {}
+  }
+
+  useEffect(() => { if (profile?.isAdmin) loadActivePoll() }, [profile?.isAdmin])
+
   async function toggleEvent(id, active) {
     await updateDoc(doc(db,'events',id),{active:!active})
     toast(!active?'Événement activé':'Événement désactivé','info')
@@ -453,6 +520,7 @@ export default function AdminPage() {
             [TAB.USERS,'👥 USERS'],
             [TAB.GUEST,'👻 DON INVITÉ'],
             [TAB.MASSGIFT,'🎁 DON GLOBAL'],
+            [TAB.POLL,'📊 SONDAGE'],
             [TAB.CUTSCENE,'🎬 CUTSCÈNE'],
             [TAB.ANNOUNCE,'📢 ANNONCES'],
             [TAB.EVENTS,'🎉 EVENTS'],
@@ -917,6 +985,128 @@ export default function AdminPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ══ SONDAGE ══════════════════════════════════════════════ */}
+      {tab===TAB.POLL && (
+        <div style={{display:'grid',gridTemplateColumns:'420px 1fr',gap:24,alignItems:'start'}}>
+
+          {/* Création */}
+          <div className="card glow" style={{padding:28,position:'relative'}}>
+            <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#00d4ff,transparent)'}}/>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:18,letterSpacing:3,color:'#00d4ff',marginBottom:20}}>📊 CRÉER UN SONDAGE</div>
+
+            <div className="field">
+              <label>Question</label>
+              <input value={pollQuestion} onChange={e=>setPollQuestion(e.target.value)}
+                placeholder="ex: Quel est votre événement préféré ?"
+                maxLength={200} style={{width:'100%',background:'#050d1a',border:'1px solid #1a3a5c',color:'#c8e6f0',padding:'9px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:12,outline:'none'}}/>
+            </div>
+
+            <div className="field">
+              <label>Options de réponse (2 minimum, 6 max)</label>
+              {pollOptions.map((opt,i)=>(
+                <div key={i} style={{display:'flex',gap:8,marginBottom:6,alignItems:'center'}}>
+                  <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090',width:16,flexShrink:0}}>{i+1}.</span>
+                  <input value={opt} onChange={e=>setPollOptions(o=>{const n=[...o];n[i]=e.target.value;return n})}
+                    placeholder={`Option ${i+1}${i<2?' (obligatoire)':' (optionnelle)'}`} maxLength={100}
+                    style={{flex:1,background:'#050d1a',border:`1px solid ${opt.trim()?'#1a5a3a':'#1a3a5c'}`,color:'#c8e6f0',padding:'7px 10px',fontFamily:'Share Tech Mono,monospace',fontSize:11,outline:'none'}}/>
+                </div>
+              ))}
+              <div style={{display:'flex',gap:8,marginTop:6}}>
+                {pollOptions.length < 6 && (
+                  <button className="btn sm" onClick={()=>setPollOptions(o=>[...o,''])}>+ Option</button>
+                )}
+                {pollOptions.length > 2 && (
+                  <button className="btn sm danger" onClick={()=>setPollOptions(o=>o.slice(0,-1))}>− Retirer</button>
+                )}
+              </div>
+            </div>
+
+            <div className="field" style={{marginBottom:0}}>
+              <label>Mode</label>
+              <div style={{display:'flex',gap:10,marginTop:6}}>
+                {[[false,'✅ Choix unique'],[true,'☑️ Choix multiple']].map(([v,l])=>(
+                  <div key={String(v)} onClick={()=>setPollMulti(v)}
+                    style={{padding:'7px 14px',border:`1px solid ${pollMulti===v?'#00d4ff':'#1a3a5c'}`,background:pollMulti===v?'rgba(0,212,255,.1)':'transparent',color:pollMulti===v?'#00d4ff':'#4a7090',cursor:'pointer',fontFamily:'Share Tech Mono,monospace',fontSize:10}}>
+                    {l}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button className="btn primary full" onClick={createPoll} style={{marginTop:20}}>
+              🚀 LANCER LE SONDAGE
+            </button>
+            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090',marginTop:8}}>
+              Le sondage sera visible par tous les joueurs connectés en temps réel.
+            </div>
+          </div>
+
+          {/* Résultats en direct */}
+          <div>
+            {activePoll ? (
+              <div className="card" style={{padding:24,border:'1px solid rgba(0,212,255,.3)'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:8}}>
+                  <div>
+                    <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:18,letterSpacing:3,color:'#00d4ff',marginBottom:4}}>
+                      📊 SONDAGE EN COURS
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{width:7,height:7,borderRadius:'50%',background:'#00ff88',display:'inline-block',animation:'blink 1s infinite'}}/>
+                      <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#4a7090'}}>
+                        {Object.keys(activePoll.votes||{}).length} votant(s) · {activePoll.multi?'Choix multiple':'Choix unique'}
+                      </span>
+                    </div>
+                  </div>
+                  <button className="btn sm danger" onClick={closePoll}>⏹ TERMINER</button>
+                </div>
+
+                <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:2,color:'#c8e6f0',marginBottom:20}}>
+                  {activePoll.question}
+                </div>
+
+                {activePoll.options.map((opt,i)=>{
+                  const total = Object.values(pollResults||{}).reduce((s,v)=>s+v,0) || 1
+                  const count = pollResults?.[i] || 0
+                  const pct   = Math.round(count/total*100)
+                  const isWinner = count === Math.max(...Object.values(pollResults||{0:0}))
+                  return (
+                    <div key={i} style={{marginBottom:12}}>
+                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                        <span style={{fontFamily:'Share Tech Mono,monospace',fontSize:12,color:isWinner&&count>0?'#00ff88':'#c8e6f0'}}>
+                          {isWinner&&count>0?'🏆 ':''}{opt}
+                        </span>
+                        <span style={{fontFamily:'Bebas Neue,sans-serif',fontSize:16,color:isWinner&&count>0?'#00ff88':'#4a7090'}}>
+                          {count} ({pct}%)
+                        </span>
+                      </div>
+                      <div style={{height:10,background:'#091525',border:'1px solid #1a3a5c',borderRadius:5,overflow:'hidden'}}>
+                        <div style={{
+                          height:'100%',borderRadius:5,
+                          background: isWinner&&count>0 ? 'linear-gradient(90deg,#00ff88,#00d4ff)' : '#1a5a8a',
+                          width:`${pct}%`,
+                          transition:'width .4s ease',
+                        }}/>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#2a4a6a',marginTop:12}}>
+                  Mis à jour en temps réel · {Object.keys(activePoll.votes||{}).length} participants
+                </div>
+              </div>
+            ) : (
+              <div className="card" style={{padding:32,textAlign:'center'}}>
+                <div style={{fontSize:48,marginBottom:12}}>📊</div>
+                <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#2a4a6a'}}>
+                  Aucun sondage actif.<br/>Créez-en un à gauche !
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
