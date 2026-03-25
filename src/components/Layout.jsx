@@ -5,6 +5,7 @@ import { db } from '../lib/firebase'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import AnnouncementBanner from './AnnouncementBanner'
+import PollWidget from './PollWidget'
 
 export default function Layout() {
   const { user, profile, logout } = useAuth()
@@ -90,6 +91,8 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      {/* Sondage flottant visible par tous les joueurs connectés */}
+      {user && <PollWidget />}
     </>
   )
 }
