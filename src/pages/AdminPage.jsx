@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   collection, getDocs, deleteDoc, doc, updateDoc, addDoc,
-  query, orderBy, limit, onSnapshot, serverTimestamp, setDoc, getDoc, increment, arrayUnion,
+  query, orderBy, limit, onSnapshot, serverTimestamp, setDoc, getDoc, increment, arrayUnion, where,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../hooks/useAuth'
@@ -11,7 +11,7 @@ import { EVENT_TYPES } from '../hooks/useActiveEvent'
 import { ALL_ITEMS, SHIP_SKINS, SEA_THEMES, RARITY, PACKS, openPack } from '../lib/shopData'
 import { useToast } from '../components/Toast'
 
-const TAB = { USERS:'users', GAMES:'games', LEARN:'learn', ANNOUNCE:'announce', EVENTS:'events', SPECTATE:'spectate', STATS:'stats', MASSGIFT:'massgift', CUTSCENE:'cutscene' }
+const TAB = { USERS:'users', GAMES:'games', LEARN:'learn', ANNOUNCE:'announce', EVENTS:'events', SPECTATE:'spectate', STATS:'stats', MASSGIFT:'massgift', CUTSCENE:'cutscene', GUEST:'guest' }
 
 const tabStyle = (active) => ({
   padding:'7px 14px', fontFamily:'Bebas Neue,sans-serif', fontSize:13, letterSpacing:2,
@@ -85,11 +85,44 @@ export default function AdminPage() {
   const [spectateData,  setSpectateData]  = useState(null)
   const unsubSpectate = useRef(null)
 
+  // Online players & visitors (real-time)
+  const [onlinePlayers,  setOnlinePlayers]  = useState([])
+  const [totalVisitors,  setTotalVisitors]  = useState(null)
+  const unsubPresence = useRef(null)
+
+  // Guest gift
+  const [guestGiftUid,   setGuestGiftUid]   = useState('')
+  const [guestGiftCoins, setGuestGiftCoins] = useState(0)
+  const [guestGiftMsg,   setGuestGiftMsg]   = useState('')
+  const [guestSearchRes, setGuestSearchRes] = useState(null) // found presence doc
+
   useEffect(() => {
     if (profile !== null && !profile?.isAdmin) navigate('/dashboard')
   }, [profile])
 
   useEffect(() => { if (profile?.isAdmin) loadTab(tab) }, [tab, profile])
+
+  // Real-time presence listener
+  useEffect(() => {
+    if (!profile?.isAdmin) return
+    // Consider online = lastSeen within 90s
+    const q = query(collection(db,'presence'), where('online','==',true))
+    unsubPresence.current = onSnapshot(q, snap => {
+      const now = Date.now()
+      const online = snap.docs
+        .map(d => ({uid:d.id,...d.data()}))
+        .filter(p => {
+          const ls = p.lastSeen?.toMillis?.() || 0
+          return now - ls < 90000
+        })
+      setOnlinePlayers(online)
+    })
+    // Total visitors
+    getDoc(doc(db,'stats','visitors')).then(snap => {
+      if (snap.exists()) setTotalVisitors(snap.data().total || 0)
+    }).catch(()=>{})
+    return () => unsubPresence.current?.()
+  }, [profile?.isAdmin])
 
   async function loadTab(t) {
     setLoading(true)
@@ -134,6 +167,41 @@ export default function AdminPage() {
     await updateDoc(doc(db,'users',id),{isAdmin:!current})
     toast(!current?'✓ Promu admin':'Admin retiré','success')
     loadTab(TAB.USERS)
+  }
+
+  async function searchGuestPresence() {
+    const val = guestGiftUid.trim()
+    if (!val) { toast('Entrez un UID ou pseudo invité','error'); return }
+    try {
+      // Try by UID first
+      const presSnap = await getDoc(doc(db,'presence',val))
+      if (presSnap.exists()) { setGuestSearchRes({uid:val,...presSnap.data()}); return }
+      // Try by username in presence collection
+      const q = query(collection(db,'presence'), where('username','==',val), where('isAnonymous','==',true))
+      const snap = await getDocs(q)
+      if (!snap.empty) { setGuestSearchRes({uid:snap.docs[0].id,...snap.docs[0].data()}); return }
+      toast('Invité introuvable — est-il connecté ?','error')
+      setGuestSearchRes(null)
+    } catch(e) { toast('Erreur: '+e.message,'error') }
+  }
+
+  async function sendGuestGift() {
+    if (!guestSearchRes || !guestGiftCoins) { toast('Sélectionnez un invité et un montant','error'); return }
+    try {
+      await addDoc(collection(db,'inbox'),{
+        uid: guestSearchRes.uid,
+        message: guestGiftMsg.trim() || `🎁 Don de l'admin : 🪙 ${guestGiftCoins} pièces`,
+        from: profile?.username||'Admin',
+        type: 'reward',
+        coins: guestGiftCoins,
+        skin: null, pack: null, packItems: null, wins: 0, losses: 0,
+        claimed: false, read: false,
+        createdAt: serverTimestamp(),
+        isGuestGift: true,
+      })
+      toast(`Don envoyé à ${guestSearchRes.username} !`,'success')
+      setGuestGiftUid(''); setGuestGiftCoins(0); setGuestGiftMsg(''); setGuestSearchRes(null)
+    } catch(e) { toast('Erreur: '+e.message,'error') }
   }
 
   async function sendReward(uid) {
@@ -383,6 +451,7 @@ export default function AdminPage() {
         <div style={{marginLeft:'auto',display:'flex',gap:6,flexWrap:'wrap'}}>
           {[
             [TAB.USERS,'👥 USERS'],
+            [TAB.GUEST,'👻 DON INVITÉ'],
             [TAB.MASSGIFT,'🎁 DON GLOBAL'],
             [TAB.CUTSCENE,'🎬 CUTSCÈNE'],
             [TAB.ANNOUNCE,'📢 ANNONCES'],
@@ -855,25 +924,141 @@ export default function AdminPage() {
       {/* ══ STATS ════════════════════════════════════════════════ */}
       {tab===TAB.STATS && (
         <div>
+          {/* Top stats grid */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:14,marginBottom:24}}>
             {[
-              {icon:'👥',label:'Utilisateurs',  value:users?.length,         color:'#00d4ff'},
-              {icon:'🎮',label:'Parties',        value:games?.length,         color:'#ffd700'},
-              {icon:'📚',label:'Jeux éducatifs', value:learnGames?.length,    color:'#55cc88'},
-              {icon:'🛡',label:'Admins',         value:users?.filter(u=>u.isAdmin).length, color:'#ff3a3a'},
-              {icon:'🏆',label:'Total victoires',value:users?.reduce((s,u)=>s+(u.wins||0),0), color:'#00ff88'},
-              {icon:'📢',label:'Annonces',       value:announces?.length,     color:'#ff6600'},
-              {icon:'🎉',label:'Événements actifs',value:events?.filter(e=>e.active).length, color:'#ffd700'},
+              {icon:'👥',label:'Utilisateurs',     value:users?.length,                                    color:'#00d4ff'},
+              {icon:'🎮',label:'Parties',           value:games?.length,                                    color:'#ffd700'},
+              {icon:'📚',label:'Jeux éducatifs',   value:learnGames?.length,                               color:'#55cc88'},
+              {icon:'🛡',label:'Admins',            value:users?.filter(u=>u.isAdmin).length,               color:'#ff3a3a'},
+              {icon:'🏆',label:'Total victoires',  value:users?.reduce((s,u)=>s+(u.wins||0),0),            color:'#00ff88'},
+              {icon:'📢',label:'Annonces',          value:announces?.length,                                color:'#ff6600'},
+              {icon:'🎉',label:'Événements actifs',value:events?.filter(e=>e.active).length,               color:'#ffd700'},
+              {icon:'🌐',label:'En ligne maintenant',value:(onlinePlayers.length),                          color:'#00ff88', live:true},
+              {icon:'👣',label:'Total visiteurs',  value:totalVisitors,                                    color:'#aa44ff'},
             ].map(s=>(
-              <div key={s.label} className="card" style={{padding:20,textAlign:'center'}}>
+              <div key={s.label} className="card" style={{padding:20,textAlign:'center',position:'relative',border:s.live?`1px solid ${s.color}66`:'1px solid #1a3a5c'}}>
+                {s.live && <div style={{position:'absolute',top:8,right:8,width:7,height:7,borderRadius:'50%',background:'#00ff88',boxShadow:'0 0 6px #00ff88',animation:'blink 1s infinite'}}/>}
                 <div style={{fontSize:32,marginBottom:6}}>{s.icon}</div>
                 <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:40,letterSpacing:2,color:s.color}}>{s.value??'…'}</div>
                 <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090',letterSpacing:1}}>{s.label.toUpperCase()}</div>
               </div>
             ))}
           </div>
+
+          {/* Online players list */}
+          <div className="card" style={{padding:20,marginBottom:16}}>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:16,letterSpacing:3,color:'#00ff88',marginBottom:14,display:'flex',alignItems:'center',gap:10}}>
+              <span style={{width:8,height:8,borderRadius:'50%',background:'#00ff88',display:'inline-block',animation:'blink 1s infinite'}}/>
+              JOUEURS EN LIGNE — {onlinePlayers.length} (vous inclus)
+            </div>
+            {onlinePlayers.length === 0
+              ? <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#2a4a6a'}}>Aucun joueur en ligne détecté.</div>
+              : <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                  {onlinePlayers.map(p=>(
+                    <div key={p.uid} style={{
+                      padding:'6px 12px',
+                      border:`1px solid ${p.uid===user?.uid?'#00d4ff':p.isAnonymous?'#4a3a2a':'#1a3a5c'}`,
+                      background:p.uid===user?.uid?'rgba(0,212,255,.08)':p.isAnonymous?'rgba(255,102,0,.05)':'transparent',
+                      fontFamily:'Share Tech Mono,monospace',fontSize:10,
+                      color:p.uid===user?.uid?'#00d4ff':p.isAnonymous?'#cc8800':'#c8e6f0',
+                      display:'flex',alignItems:'center',gap:6,
+                    }}>
+                      <span style={{fontSize:11}}>{p.isAnonymous?'👻':'⚓'}</span>
+                      {p.username}
+                      {p.uid===user?.uid&&<span style={{fontSize:8,color:'#00d4ff'}}>(vous)</span>}
+                      {p.isAnonymous&&<span style={{fontSize:8,color:'#cc8800'}}>invité</span>}
+                    </div>
+                  ))}
+                </div>
+            }
+          </div>
+
           <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#2a4a6a'}}>
-            ℹ Ouvre chaque onglet pour charger les données complètes.
+            ℹ Ouvre chaque onglet pour charger les données complètes. · Joueurs en ligne = actifs dans les 90 dernières secondes.
+          </div>
+        </div>
+      )}
+
+      {/* ══ DON INVITÉ ═══════════════════════════════════════════ */}
+      {tab===TAB.GUEST && (
+        <div style={{maxWidth:600}}>
+          <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:22,letterSpacing:4,color:'#cc8800',marginBottom:4}}>👻 DON À UN COMPTE INVITÉ</div>
+          <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:11,color:'#4a7090',marginBottom:20,lineHeight:1.7}}>
+            Les invités n'ont pas de compte Firestore. Recherchez-les par leur pseudo ou UID dans la liste des joueurs en ligne.
+          </div>
+
+          {/* Online guests list */}
+          <div className="card" style={{padding:16,marginBottom:20}}>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:14,letterSpacing:2,color:'#cc8800',marginBottom:10}}>
+              👻 INVITÉS EN LIGNE ({onlinePlayers.filter(p=>p.isAnonymous).length})
+            </div>
+            {onlinePlayers.filter(p=>p.isAnonymous).length === 0
+              ? <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:10,color:'#2a4a6a'}}>Aucun invité en ligne actuellement.</div>
+              : <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {onlinePlayers.filter(p=>p.isAnonymous).map(p=>(
+                    <button key={p.uid} onClick={()=>{setGuestGiftUid(p.uid);setGuestSearchRes(p)}}
+                      style={{padding:'6px 12px',border:`1px solid ${guestSearchRes?.uid===p.uid?'#cc8800':'#3a2a1a'}`,background:guestSearchRes?.uid===p.uid?'rgba(204,136,0,.15)':'transparent',color:guestSearchRes?.uid===p.uid?'#cc8800':'#886644',fontFamily:'Share Tech Mono,monospace',fontSize:10,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
+                      👻 {p.username}
+                      <span style={{fontSize:8,color:'#664422'}}>{p.uid.slice(0,8)}</span>
+                    </button>
+                  ))}
+                </div>
+            }
+          </div>
+
+          {/* Manual UID search */}
+          <div className="card glow" style={{padding:24,position:'relative',marginBottom:20}}>
+            <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:'linear-gradient(90deg,transparent,#cc8800,transparent)'}}/>
+            <div style={{fontFamily:'Bebas Neue,sans-serif',fontSize:16,letterSpacing:3,color:'#cc8800',marginBottom:14}}>RECHERCHE MANUELLE</div>
+
+            <div className="field">
+              <label>UID ou pseudo de l'invité</label>
+              <div style={{display:'flex',gap:8}}>
+                <input value={guestGiftUid} onChange={e=>{setGuestGiftUid(e.target.value);setGuestSearchRes(null)}}
+                  placeholder="UID Firebase ou pseudo..." style={{flex:1,background:'#050d1a',border:'1px solid #3a2a1a',color:'#c8e6f0',padding:'9px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:12,outline:'none'}}/>
+                <button className="btn sm" onClick={searchGuestPresence} style={{borderColor:'#cc8800',color:'#cc8800'}}>🔍 CHERCHER</button>
+              </div>
+            </div>
+
+            {guestSearchRes && (
+              <div style={{padding:'10px 14px',background:'rgba(204,136,0,.08)',border:'1px solid rgba(204,136,0,.3)',marginBottom:16,fontFamily:'Share Tech Mono,monospace',fontSize:11}}>
+                <span style={{color:'#cc8800'}}>✓ Trouvé : </span>
+                <span style={{color:'#c8e6f0'}}>{guestSearchRes.username}</span>
+                <span style={{color:'#4a7090',marginLeft:8}}>{guestSearchRes.uid.slice(0,16)}…</span>
+                <span style={{marginLeft:8,color:guestSearchRes.online?'#00ff88':'#ff3a3a'}}>{guestSearchRes.online?'🟢 en ligne':'🔴 hors ligne'}</span>
+              </div>
+            )}
+
+            <div className="field">
+              <label>🪙 Pièces à donner</label>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:4}}>
+                <input type="number" min="0" max="9999" value={guestGiftCoins||''} onChange={e=>setGuestGiftCoins(+e.target.value)}
+                  placeholder="0" style={{width:'120px',background:'#050d1a',border:'1px solid #3a2a1a',color:'#ffd700',padding:'8px 12px',fontFamily:'Bebas Neue,sans-serif',fontSize:16,outline:'none'}}/>
+                {[50,100,200,500].map(n=>(
+                  <button key={n} onClick={()=>setGuestGiftCoins(n)}
+                    style={{padding:'4px 10px',background:'rgba(255,215,0,.08)',border:'1px solid rgba(255,215,0,.25)',color:'#ffd700',fontFamily:'Share Tech Mono,monospace',fontSize:9,cursor:'pointer'}}>
+                    +{n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Message (optionnel)</label>
+              <input value={guestGiftMsg} onChange={e=>setGuestGiftMsg(e.target.value)}
+                placeholder="ex: Bienvenue sur Naval Command !" maxLength={150}
+                style={{width:'100%',background:'#050d1a',border:'1px solid #3a2a1a',color:'#c8e6f0',padding:'9px 12px',fontFamily:'Share Tech Mono,monospace',fontSize:12,outline:'none'}}/>
+            </div>
+
+            <button className="btn primary full" onClick={sendGuestGift}
+              disabled={!guestSearchRes||!guestGiftCoins}
+              style={{borderColor:'#cc8800',color:'#cc8800',background:'rgba(204,136,0,.1)'}}>
+              🎁 ENVOYER LE DON À {guestSearchRes?.username||'L\'INVITÉ'}
+            </button>
+            <div style={{fontFamily:'Share Tech Mono,monospace',fontSize:9,color:'#4a7090',marginTop:8}}>
+              ℹ Le don apparaîtra dans la boîte de réception de l'invité. Les pièces seront appliquées quand il les réclamera.
+            </div>
           </div>
         </div>
       )}
