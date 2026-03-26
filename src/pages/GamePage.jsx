@@ -25,6 +25,22 @@ const SHIP_STYLES = {
   destroyer:  { bg:'#3a1a08', border:'#aa5522', label:'⚡', color:'#ee8844' },
 }
 
+// ── Ship SVG patterns as background-image ─────────────────────────
+function shipSVG(shipId, color, border) {
+  const c = color, b = border
+  const e = s => encodeURIComponent(s)
+  const svgs = {
+    carrier: () => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect x='2' y='18' width='32' height='10' rx='1' fill='${c}22' stroke='${b}' stroke-width='1'/><rect x='8' y='12' width='14' height='8' rx='1' fill='${c}33' stroke='${b}' stroke-width='0.8'/><rect x='14' y='7' width='5' height='7' rx='0.5' fill='${c}44' stroke='${b}' stroke-width='0.7'/><line x1='16' y1='4' x2='16' y2='8' stroke='${b}' stroke-width='1'/><line x1='13' y1='5' x2='19' y2='5' stroke='${b}' stroke-width='0.6'/><path d='M4 22 L8 19 L8 22Z' fill='${c}66'/><path d='M28 22 L32 19 L32 22Z' fill='${c}66'/><rect x='5' y='24' width='3' height='2' rx='0.3' fill='${c}55' stroke='${b}' stroke-width='0.4'/><rect x='28' y='24' width='3' height='2' rx='0.3' fill='${c}55' stroke='${b}' stroke-width='0.4'/><line x1='2' y1='28' x2='34' y2='28' stroke='${b}' stroke-width='0.5' stroke-dasharray='2,2' opacity='0.5'/><circle cx='16' cy='21' r='1' fill='${b}' opacity='0.6'/></svg>`,
+    battleship: () => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><path d='M3 20 L6 14 L30 14 L33 20 L18 24Z' fill='${c}22' stroke='${b}' stroke-width='1'/><rect x='10' y='10' width='14' height='7' rx='1' fill='${c}33' stroke='${b}' stroke-width='0.8'/><rect x='14' y='6' width='7' height='6' rx='0.5' fill='${c}44' stroke='${b}' stroke-width='0.7'/><rect x='4' y='16' width='7' height='4' rx='0.5' fill='${c}33' stroke='${b}' stroke-width='0.7'/><line x1='5' y1='17' x2='2' y2='13' stroke='${b}' stroke-width='1.5' stroke-linecap='round'/><line x1='8' y1='17' x2='5' y2='13' stroke='${b}' stroke-width='1.5' stroke-linecap='round'/><rect x='25' y='16' width='7' height='4' rx='0.5' fill='${c}33' stroke='${b}' stroke-width='0.7'/><line x1='28' y1='17' x2='31' y2='13' stroke='${b}' stroke-width='1.5' stroke-linecap='round'/><line x1='31' y1='17' x2='34' y2='13' stroke='${b}' stroke-width='1.5' stroke-linecap='round'/><circle cx='18' cy='17' r='2' fill='${c}55' stroke='${b}' stroke-width='0.6'/></svg>`,
+    cruiser: () => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><path d='M4 22 L8 15 L28 15 L32 22 L18 25Z' fill='${c}22' stroke='${b}' stroke-width='1'/><rect x='11' y='11' width='12' height='7' rx='1' fill='${c}33' stroke='${b}' stroke-width='0.8'/><rect x='15' y='7' width='4' height='6' rx='0.5' fill='${c}44' stroke='${b}' stroke-width='0.7'/><rect x='20' y='8' width='3' height='5' rx='0.5' fill='${c}33' stroke='${b}' stroke-width='0.6'/><line x1='22' y1='6' x2='22' y2='9' stroke='${b}' stroke-width='0.8'/><rect x='6' y='18' width='4' height='3' rx='0.3' fill='${c}44' stroke='${b}' stroke-width='0.5'/><line x1='7' y1='18' x2='7' y2='14' stroke='${b}' stroke-width='0.9' stroke-linecap='round'/><rect x='26' y='18' width='4' height='3' rx='0.3' fill='${c}44' stroke='${b}' stroke-width='0.5'/><circle cx='18' cy='20' r='1.5' fill='${b}' opacity='0.5'/></svg>`,
+    submarine: () => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><ellipse cx='18' cy='22' rx='15' ry='6' fill='${c}22' stroke='${b}' stroke-width='1'/><path d='M13 17 L14 11 L22 11 L23 17Z' fill='${c}33' stroke='${b}' stroke-width='0.8'/><line x1='17' y1='11' x2='17' y2='7' stroke='${b}' stroke-width='0.9'/><line x1='17' y1='7' x2='21' y2='7' stroke='${b}' stroke-width='0.9'/><circle cx='21' cy='7' r='1.2' fill='${c}66' stroke='${b}' stroke-width='0.6'/><ellipse cx='30' cy='22' rx='3' ry='3.5' fill='${c}33' stroke='${b}' stroke-width='0.6'/><path d='M6 20 L3 22 M6 24 L3 22' stroke='${b}' stroke-width='1.2' stroke-linecap='round'/><circle cx='12' cy='22' r='1.5' fill='${c}55' stroke='${b}' stroke-width='0.5'/><circle cx='18' cy='22' r='1.5' fill='${c}55' stroke='${b}' stroke-width='0.5'/><circle cx='24' cy='22' r='1.5' fill='${c}55' stroke='${b}' stroke-width='0.5'/></svg>`,
+    destroyer: () => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><path d='M5 22 L10 15 L26 15 L31 22 L18 25Z' fill='${c}22' stroke='${b}' stroke-width='1'/><rect x='12' y='11' width='11' height='6' rx='1' fill='${c}33' stroke='${b}' stroke-width='0.8'/><line x1='16' y1='8' x2='16' y2='12' stroke='${b}' stroke-width='1.2' stroke-linecap='round'/><line x1='20' y1='9' x2='20' y2='12' stroke='${b}' stroke-width='1' stroke-linecap='round'/><rect x='6' y='17' width='6' height='3' rx='0.3' fill='${c}44' stroke='${b}' stroke-width='0.5'/><line x1='7' y1='18' x2='12' y2='18' stroke='${b}' stroke-width='0.5'/><line x1='7' y1='19.5' x2='12' y2='19.5' stroke='${b}' stroke-width='0.5'/><rect x='24' y='17' width='6' height='3' rx='0.3' fill='${c}44' stroke='${b}' stroke-width='0.5'/><circle cx='18' cy='19' r='1.2' fill='${b}' opacity='0.5'/></svg>`,
+  }
+  const fn = svgs[shipId]
+  if (!fn) return null
+  return `url("data:image/svg+xml,${e(fn())}")`
+}
+
 // ── Disco color cycle ─────────────────────────────────────────────
 const DISCO_COLORS = ['#ff0080','#ff6600','#ffff00','#00ff88','#00d4ff','#aa44ff','#ff00ff']
 function discoColor(r, c, tick) {
@@ -66,23 +82,28 @@ function Grid({ board, gridSize = DEFAULT_GRID_SIZE, shipMap = {}, onCellClick, 
               // Apply equipped ship skin — shipSkin is {carrier:{bg,border,color}, battleship:...}
               const skinSt = (shipSkin && shipId && shipSkin[shipId]) ? shipSkin[shipId] : st
               let bg = emptyCellBg, borderColor = emptyCellBorder, content = null
-              if (skinSt && (v==='ship'||v===null)) { bg=skinSt.bg; borderColor=skinSt.border }
-              if (v==='ship'&&!skinSt)              { bg='#1a3a5c'; borderColor='#2a5a8c' }
-              if (v==='preview-valid')          { bg='rgba(0,212,255,.18)'; borderColor='#00d4ff' }
-              if (v==='preview-invalid')        { bg='rgba(255,58,58,.18)'; borderColor='#ff3a3a' }
-              if (v==='miss')                   { bg=missCellBg; borderColor=emptyCellBorder; content=<span style={{color:'#4a9abb',fontSize:13,lineHeight:1}}>·</span> }
-              if (v==='hit')                    { bg=hitCellBg; borderColor='#cc5500'; content=<span style={{color:'#ff6600',fontSize:10}}>✕</span> }
-              if (v==='sunk')                   { bg='#2e0000'; borderColor='#880000'; content=<span style={{color:'#ff3333',fontSize:10}}>✕</span> }
+              let bgImg = 'none'
+              if (skinSt && (v==='ship'||v===null)) {
+                bg = skinSt.bg; borderColor = skinSt.border
+                const svg = shipSVG(shipId, skinSt.color || st?.color, skinSt.border)
+                if (svg) bgImg = svg
+              }
+              if (v==='ship'&&!skinSt) { bg='#1a3a5c'; borderColor='#2a5a8c' }
+              if (v==='preview-valid')          { bg='rgba(0,212,255,.18)'; borderColor='#00d4ff'; bgImg='none' }
+              if (v==='preview-invalid')        { bg='rgba(255,58,58,.18)'; borderColor='#ff3a3a'; bgImg='none' }
+              if (v==='miss')                   { bg=missCellBg; borderColor=emptyCellBorder; bgImg='none'; content=<span style={{color:'#4a9abb',fontSize:13,lineHeight:1}}>·</span> }
+              if (v==='hit')                    { bg=hitCellBg; borderColor='#cc5500'; bgImg='none'; content=<span style={{color:'#ff6600',fontSize:10}}>✕</span> }
+              if (v==='sunk')                   { bg='#2e0000'; borderColor='#880000'; bgImg='none'; content=<span style={{color:'#ff3333',fontSize:10}}>✕</span> }
               // Disco mode
-              if (eventType==='disco' && !v && !st) { const dc=discoColor(r,c,discTick); bg=`${dc}22`; borderColor=`${dc}66` }
+              if (eventType==='disco' && !v && !st) { const dc=discoColor(r,c,discTick); bg=`${dc}22`; borderColor=`${dc}66`; bgImg='none' }
               // Fog
-              if (isFogged) { bg='#051220'; borderColor='#0a1a2a'; content=<span style={{color:'#1a3a5c',fontSize:16}}>~</span> }
+              if (isFogged) { bg='#051220'; borderColor='#0a1a2a'; bgImg='none'; content=<span style={{color:'#1a3a5c',fontSize:16}}>~</span> }
               return (
                 <div key={c}
                   onClick={() => interactive && onCellClick?.(r,c)}
                   onMouseEnter={() => interactive && onCellHover?.(r,c)}
                   onMouseLeave={() => interactive && onCellLeave?.()}
-                  style={{ width:cellSize, height:cellSize, background:bg, border:`1px solid ${borderColor}`, cursor:interactive?'crosshair':'default', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .08s', flexShrink:0 }}
+                  style={{ width:cellSize, height:cellSize, background:bg, backgroundImage:bgImg, backgroundSize:'contain', backgroundRepeat:'no-repeat', backgroundPosition:'center', border:`1px solid ${borderColor}`, cursor:interactive?'crosshair':'default', display:'flex', alignItems:'center', justifyContent:'center', transition:'background .08s', flexShrink:0 }}
                 >{content}</div>
               )
             })}
@@ -225,8 +246,20 @@ export default function GamePage() {
 
   useEffect(() => () => { unsubRef.current?.() }, [])
 
+  // ── Audio refs & state — déclarés AVANT les fonctions ────────────
+  const audioRef        = useRef(null)
+  const audioCtxRef     = useRef(null)
+  const procStopRef     = useRef(null)
+  const pendingMusicRef = useRef(null) // event type à jouer dès que l'user clique
+  const [musicMuted,    setMusicMuted]    = useState(false)
+  const [musicVolume,   setMusicVolume]   = useState(0.35)
+  const [currentTrack,  setCurrentTrack]  = useState(0)
+  const [karaokeVotes,  setKaraokeVotes]  = useState({})
+  const [showKaraoke,   setShowKaraoke]   = useState(false)
+  const [noteFlash,     setNoteFlash]     = useState(null)
+  const [musicReady,    setMusicReady]    = useState(false) // AudioContext unlocked
+
   // ── Music tracks per event ────────────────────────────────────
-  // Disco = Crab Rave via URL. Autres = Web Audio API procédurale.
   const MUSIC_TRACKS = {
     disco:     [{ url:'https://ia803400.us.archive.org/5/items/crab-rave-noisestorm/Crab%20Rave%20-%20Noisestorm.mp3', label:'Crab Rave 🦀', proc:false }],
     pirates:   [{ url:null, label:'Shanty Pirate 🏴‍☠️',   proc:'pirates'   }],
@@ -236,141 +269,137 @@ export default function GamePage() {
     notes: [],
   }
 
-  // ── Web Audio procédurale ──────────────────────────────────────
-  const procStopRef = useRef(null)
+  // ── Unlock AudioContext on first user interaction ─────────────
+  useEffect(() => {
+    function unlock() {
+      if (audioCtxRef.current) return
+      try {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
+        setMusicReady(true)
+        // Play pending music if any
+        if (pendingMusicRef.current) { startProcMusicNow(pendingMusicRef.current); pendingMusicRef.current = null }
+      } catch {}
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('keydown', unlock)
+      document.removeEventListener('touchstart', unlock)
+    }
+    document.addEventListener('click', unlock)
+    document.addEventListener('keydown', unlock)
+    document.addEventListener('touchstart', unlock)
+    return () => {
+      document.removeEventListener('click', unlock)
+      document.removeEventListener('keydown', unlock)
+      document.removeEventListener('touchstart', unlock)
+    }
+  }, [])
 
   function stopProcMusic() {
     if (procStopRef.current) { try { procStopRef.current() } catch {} procStopRef.current = null }
   }
 
-  function getAudioCtx() {
-    if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
-    return audioCtxRef.current
-  }
-
-  function startProcMusic(type) {
+  function startProcMusicNow(type) {
     stopProcMusic()
+    const ctx = audioCtxRef.current
+    if (!ctx) { pendingMusicRef.current = type; return }
+    if (ctx.state === 'suspended') ctx.resume()
+    const vol = musicMuted ? 0 : musicVolume * 0.5
+    const master = ctx.createGain(); master.gain.value = vol; master.connect(ctx.destination)
     try {
-      const ctx = getAudioCtx()
-      if (ctx.state === 'suspended') ctx.resume()
-      const master = ctx.createGain(); master.gain.value = musicMuted ? 0 : musicVolume * 0.6; master.connect(ctx.destination)
-
       if (type === 'pirates') {
         const notes = [261,293,329,261,261,293,329,261,329,349,392,329,349,392,392,440,392,349,329,261]
         let i = 0
         const id = setInterval(() => {
+          if (!ctx || ctx.state === 'closed') return
           const osc = ctx.createOscillator(), g = ctx.createGain()
           osc.type = 'sawtooth'; osc.frequency.value = notes[i % notes.length]
           g.gain.setValueAtTime(0.3, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35)
           osc.connect(g); g.connect(master); osc.start(); osc.stop(ctx.currentTime + 0.38)
-          if (i % 4 === 0) { const d = ctx.createOscillator(), dg = ctx.createGain(); d.type='square'; d.frequency.value=80; dg.gain.setValueAtTime(0.4,ctx.currentTime); dg.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.1); d.connect(dg); dg.connect(master); d.start(); d.stop(ctx.currentTime+0.1) }
+          if (i % 4 === 0) { const d = ctx.createOscillator(), dg = ctx.createGain(); d.type='square'; d.frequency.value=80; dg.gain.setValueAtTime(0.35,ctx.currentTime); dg.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.1); d.connect(dg); dg.connect(master); d.start(); d.stop(ctx.currentTime+0.1) }
           i++
         }, 380)
         procStopRef.current = () => clearInterval(id)
-
       } else if (type === 'tempete') {
         const drone = ctx.createOscillator(), dg = ctx.createGain()
-        drone.type = 'sawtooth'; drone.frequency.value = 55; dg.gain.value = 0.15
+        drone.type = 'sawtooth'; drone.frequency.value = 55; dg.gain.value = 0.12
         drone.connect(dg); dg.connect(master); drone.start()
         const chords = [[261,329,392],[220,277,349],[196,247,311],[174,220,261]]
         let ci = 0
         const id = setInterval(() => {
+          if (!ctx || ctx.state === 'closed') return
           chords[ci % chords.length].forEach((f, j) => {
             const o = ctx.createOscillator(), g = ctx.createGain(); o.type='triangle'; o.frequency.value=f
-            g.gain.setValueAtTime(0, ctx.currentTime + j*0.08); g.gain.linearRampToValueAtTime(0.2, ctx.currentTime + j*0.08+0.05); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.65)
+            g.gain.setValueAtTime(0, ctx.currentTime+j*0.08); g.gain.linearRampToValueAtTime(0.18, ctx.currentTime+j*0.08+0.05); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.65)
             o.connect(g); g.connect(master); o.start(ctx.currentTime+j*0.08); o.stop(ctx.currentTime+0.7)
           }); ci++
         }, 700)
         procStopRef.current = () => { clearInterval(id); try { drone.stop() } catch {} }
-
       } else if (type === 'halloween') {
         const mel = [440,466,415,440,415,392,440,415,392,370,392,415,440,493,440]
         let i = 0
         const id = setInterval(() => {
+          if (!ctx || ctx.state === 'closed') return
           [1, 2].forEach(oct => {
             const o = ctx.createOscillator(), g = ctx.createGain()
             o.type = oct===1 ? 'square' : 'sine'; o.frequency.value = mel[i%mel.length] / oct
-            g.gain.setValueAtTime(oct===1?0.22:0.14, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.17)
+            g.gain.setValueAtTime(oct===1?0.2:0.12, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.17)
             o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+0.18)
           }); i++
         }, 180)
         procStopRef.current = () => clearInterval(id)
-
       } else if (type === 'karaoke') {
         const mel = [523,587,659,698,784,698,659,587,523,494,523,587,659,523]
         let i = 0
         const id = setInterval(() => {
+          if (!ctx || ctx.state === 'closed') return
           const o = ctx.createOscillator(), g = ctx.createGain()
           o.type='sine'; o.frequency.value=mel[i%mel.length]
-          g.gain.setValueAtTime(0.28, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.25)
+          g.gain.setValueAtTime(0.25, ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.25)
           o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+0.28)
-          if (i%2===0) { const b=ctx.createOscillator(), bg=ctx.createGain(); b.type='triangle'; b.frequency.value=mel[i%mel.length]/4; bg.gain.setValueAtTime(0.18,ctx.currentTime); bg.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.28); b.connect(bg); bg.connect(master); b.start(); b.stop(ctx.currentTime+0.28) }
+          if (i%2===0) { const b=ctx.createOscillator(), bg=ctx.createGain(); b.type='triangle'; b.frequency.value=mel[i%mel.length]/4; bg.gain.setValueAtTime(0.15,ctx.currentTime); bg.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.28); b.connect(bg); bg.connect(master); b.start(); b.stop(ctx.currentTime+0.28) }
           i++
         }, 280)
         procStopRef.current = () => clearInterval(id)
       }
-    } catch(e) { console.warn('Web Audio error:', e) }
+    } catch(err) { console.warn('Proc music error:', err) }
   }
-
-  // ── Audio refs & state ─────────────────────────────────────────
-  const audioRef        = useRef(null)
-  const audioCtxRef     = useRef(null)
-  const [musicMuted,    setMusicMuted]    = useState(false)
-  const [musicVolume,   setMusicVolume]   = useState(0.35)
-  const [currentTrack,  setCurrentTrack]  = useState(0)
-  const [karaokeVotes,  setKaraokeVotes]  = useState({}) // trackIdx -> count
-  const [showKaraoke,   setShowKaraoke]   = useState(false)
-  const [noteFlash,     setNoteFlash]     = useState(null) // note name for visual
 
   // ── Play a note via Web Audio API (for 'notes' event) ─────────
   function playNote(r, c) {
+    const ctx = audioCtxRef.current; if (!ctx) return
     try {
-      if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
-      const ctx = audioCtxRef.current
-      // Map cell position to musical scale (C major pentatonic)
-      const SCALE = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99, 880.00]
-      const NOTE_NAMES = ['Do', 'Ré', 'Mi', 'Sol', 'La', 'Do²', 'Ré²', 'Mi²', 'Sol²', 'La²']
-      const freq = SCALE[(r + c) % SCALE.length]
-      const noteName = NOTE_NAMES[(r + c) % NOTE_NAMES.length]
-
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
+      if (ctx.state === 'suspended') ctx.resume()
+      const SCALE = [261.63,293.66,329.63,392.00,440.00,523.25,587.33,659.25,783.99,880.00]
+      const NAMES = ['Do','Ré','Mi','Sol','La','Do²','Ré²','Mi²','Sol²','La²']
+      const freq = SCALE[(r+c) % SCALE.length]
+      const osc = ctx.createOscillator(), gain = ctx.createGain()
       osc.connect(gain); gain.connect(ctx.destination)
-      osc.frequency.value = freq
-      osc.type = 'sine'
-      gain.gain.setValueAtTime(0.5, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
-      osc.start(); osc.stop(ctx.currentTime + 0.8)
-      setNoteFlash(noteName)
+      osc.frequency.value = freq; osc.type = 'sine'
+      gain.gain.setValueAtTime(0.5, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.8)
+      osc.start(); osc.stop(ctx.currentTime+0.8)
+      setNoteFlash(NAMES[(r+c) % NAMES.length])
       setTimeout(() => setNoteFlash(null), 600)
     } catch {}
   }
 
   // ── Play event ambience sounds ──────────────────────────────────
   function playAmbience(eventType) {
+    const ctx = audioCtxRef.current; if (!ctx) return
     try {
-      if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)()
-      const ctx = audioCtxRef.current
+      if (ctx.state === 'suspended') ctx.resume()
       if (eventType === 'tempete') {
-        // Thunder rumble
-        const buf = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate)
+        const buf = ctx.createBuffer(1, ctx.sampleRate*0.5, ctx.sampleRate)
         const data = buf.getChannelData(0)
-        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.15))
-        const src = ctx.createBufferSource(); src.buffer = buf
-        const gain = ctx.createGain(); gain.gain.value = 0.3
+        for (let i=0; i<data.length; i++) data[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*0.15))
+        const src = ctx.createBufferSource(); src.buffer=buf
+        const gain = ctx.createGain(); gain.gain.value=0.25
         src.connect(gain); gain.connect(ctx.destination); src.start()
       } else if (eventType === 'halloween') {
-        // Spooky arpeggio
-        const notes = [220, 261, 311, 370]
-        notes.forEach((freq, i) => {
-          const osc = ctx.createOscillator(), gain = ctx.createGain()
+        [220,261,311,370].forEach((freq,i) => {
+          const osc=ctx.createOscillator(), gain=ctx.createGain()
           osc.connect(gain); gain.connect(ctx.destination)
-          osc.frequency.value = freq; osc.type = 'sawtooth'
-          gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.1)
-          gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + i * 0.1 + 0.05)
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.4)
-          osc.start(ctx.currentTime + i * 0.1)
-          osc.stop(ctx.currentTime + i * 0.1 + 0.4)
+          osc.frequency.value=freq; osc.type='sawtooth'
+          gain.gain.setValueAtTime(0, ctx.currentTime+i*0.1); gain.gain.linearRampToValueAtTime(0.1, ctx.currentTime+i*0.1+0.05); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+i*0.1+0.4)
+          osc.start(ctx.currentTime+i*0.1); osc.stop(ctx.currentTime+i*0.1+0.4)
         })
       }
     } catch {}
@@ -378,13 +407,12 @@ export default function GamePage() {
 
   // ── Start / stop background music ──────────────────────────────
   function startMusic(eventType, trackIdx = 0) {
-    stopMusic()
-    stopProcMusic()
+    stopMusic(); stopProcMusic()
     const tracks = MUSIC_TRACKS[eventType]
     if (!tracks || tracks.length === 0) return
     const track = tracks[trackIdx % tracks.length]
     if (track.proc) {
-      startProcMusic(track.proc)
+      startProcMusicNow(track.proc) // will queue if AudioContext not ready
     } else if (track.url) {
       try {
         audioRef.current = new Audio(track.url)
@@ -403,7 +431,7 @@ export default function GamePage() {
   const evType = activeEvent?.eventType
   useEffect(() => {
     const musicEvents = ['disco','pirates','tempete','halloween','karaoke']
-    if (!evType || !musicEvents.includes(evType)) { stopMusic(); stopProcMusic(); return }
+    if (!evType || !musicEvents.includes(evType)) { stopMusic(); stopProcMusic(); pendingMusicRef.current=null; return }
     if (evType === 'disco') {
       const id = setInterval(() => setDiscoTick(t => t + 1), 400)
       startMusic('disco', 0)
