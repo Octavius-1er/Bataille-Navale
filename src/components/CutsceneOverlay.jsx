@@ -60,7 +60,7 @@ function randomBetween(a, b) { return a + Math.random() * (b - a) }
 export default function CutsceneOverlay() {
   const [scene,   setScene]   = useState(null)
   const [tick,    setTick]    = useState(0)
-  const [phase,   setPhase]   = useState(0) // 0=off 1=flash 2=main 3=out
+  const [phase,   setPhase]   = useState(0)
   const [letters, setLetters] = useState([])
   const [particles, setParticles] = useState([])
   const timers = useRef([])
@@ -84,7 +84,6 @@ export default function CutsceneOverlay() {
     const cfg = SCENES[data.type] || SCENES.fireworks
     const msg = (data.message || data.type).toUpperCase()
 
-    // Split message into individual letters for animation
     setLetters(msg.split('').map((ch, i) => ({
       ch, i,
       delay: i * 60,
@@ -92,7 +91,6 @@ export default function CutsceneOverlay() {
       rot: randomBetween(-15, 15),
     })))
 
-    // Generate particles
     setParticles(Array.from({length:40}, (_, i) => ({
       id: i,
       emoji: cfg.particles[i % cfg.particles.length],
@@ -107,7 +105,6 @@ export default function CutsceneOverlay() {
     setScene({ ...data, cfg })
     setPhase(1)
 
-    // Tick for disco/strobe
     tickRef.current = setInterval(() => setTick(t => t + 1), 80)
 
     const t1 = setTimeout(() => setPhase(2), 200)
@@ -301,7 +298,7 @@ export default function CutsceneOverlay() {
             ))}
           </div>
 
-          {/* Main letters */}
+          {/* Main letters — animation dupliquée supprimée */}
           {letters.map(l => (
             <span key={l.i} style={{
               fontFamily:'Bebas Neue,sans-serif',
@@ -310,12 +307,11 @@ export default function CutsceneOverlay() {
               color: scene.type==='disco' ? `hsl(${discoHue + l.i*20},100%,70%)` : 'white',
               textShadow:`0 0 20px ${cfg.accent}, 0 0 40px ${cfg.accent}, 0 0 80px ${cfg.accent}`,
               '--rot': `${l.rot}deg`,
-              animation: phase===2 ? `cs-letter 0.5s cubic-bezier(0.34,1.56,0.64,1) ${l.delay}ms both` : 'none',
               display:'inline-block',
               whiteSpace: l.ch===' ' ? 'pre' : undefined,
               width: l.ch===' ' ? '0.4em' : undefined,
               animation: phase===2
-                ? `cs-letter 0.5s cubic-bezier(0.34,1.56,0.64,1) ${l.delay}ms both${scene.type==='disco'?', cs-chromatic 0.3s linear infinite':''}` 
+                ? `cs-letter 0.5s cubic-bezier(0.34,1.56,0.64,1) ${l.delay}ms both${scene.type==='disco'?', cs-chromatic 0.3s linear infinite':''}`
                 : 'none',
             }}>{l.ch}</span>
           ))}
