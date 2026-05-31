@@ -4,85 +4,13 @@
     <meta charset="UTF-8" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚓</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Naval Command - Export Latin</title>
+    <title>Naval Command</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Share+Tech+Mono&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4381520676476126"
-     crossorigin="anonymous"></script>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4381520676476126" crossorigin="anonymous"></script>
   </head>
   <body>
-    <div id="root">
-      <h1 style="font-family: 'Bebas Neue', sans-serif; color: #00d4ff; text-align: center; margin-top: 50px;">
-        OUVRE LA CONSOLE (F12) POUR COPIER LE JSON
-      </h1>
-    </div>
-
+    <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-
-    <script>
-      const gameData = {
-        "name": "Bataille navale - Déclinaisons latines",
-        "subject": "Latin",
-        "rows": ["Nominatif", "Vocatif", "Accusatif", "Génitif", "Datif", "Ablatif"],
-        "cols": ["Rosa, ae (f)", "Puella, ae (f)", "Servus, i (m)", "Dominus, i (m)", "Bellum, i (n)", "Templum, i (n)"],
-        "forms": ["positive", "negative"],
-        "cells": [
-          [
-            {"prompt": "Rosa, ae + Nominatif → ___ pulchra est.", "positive": "rosa", "negative": "rosae"},
-            {"prompt": "Puella, ae + Nominatif → ___ currit.", "positive": "puella", "negative": "puellae"},
-            {"prompt": "Servus, i + Nominatif → ___ laborat.", "positive": "servus", "negative": "servi"},
-            {"prompt": "Dominus, i + Nominatif → ___ iperat.", "positive": "dominus", "negative": "domini"},
-            {"prompt": "Bellum, i + Nominatif → ___ magnum est.", "positive": "bellum", "negative": "bella"},
-            {"prompt": "Templum, i + Nominatif → ___ stat.", "positive": "templum", "negative": "templa"}
-          ],
-          [
-            {"prompt": "Rosa, ae + Vocatif → O ___!", "positive": "rosa", "negative": "rosae"},
-            {"prompt": "Puella, ae + Vocatif → O ___!", "positive": "puella", "negative": "puellae"},
-            {"prompt": "Servus, i + Vocatif → ___, audi!", "positive": "serve", "negative": "servi"},
-            {"prompt": "Dominus, i + Vocatif → ___, veni!", "positive": "domine", "negative": "domini"},
-            {"prompt": "Bellum, i + Vocatif → O ___!", "positive": "bellum", "negative": "bella"},
-            {"prompt": "Templum, i + Vocatif → O ___!", "positive": "templum", "negative": "templa"}
-          ],
-          [
-            {"prompt": "Rosa, ae + Accusatif → Puella ___ amat.", "positive": "rosam", "negative": "rosas"},
-            {"prompt": "Puella, ae + Accusatif → Nauta ___ videt.", "positive": "puellam", "negative": "puellas"},
-            {"prompt": "Servus, i + Accusatif → Dominus ___ vocat.", "positive": "servum", "negative": "servos"},
-            {"prompt": "Dominus, i + Accusatif → Servus ___ timet.", "positive": "dominum", "negative": "dominos"},
-            {"prompt": "Bellum, i + Accusatif → Miles ___ gerit.", "positive": "bellum", "negative": "bella"},
-            {"prompt": "Templum, i + Accusatif → Hostis ___ videt.", "positive": "templum", "negative": "templa"}
-          ],
-          [
-            {"prompt": "Rosa, ae + Génitif → Color ___ est.", "positive": "rosae", "negative": "rosarum"},
-            {"prompt": "Puella, ae + Génitif → Liber ___ est.", "positive": "puellae", "negative": "puellarum"},
-            {"prompt": "Servus, i + Génitif → Domus ___ est.", "positive": "servi", "negative": "servorum"},
-            {"prompt": "Dominus, i + Génitif → Imperium ___ est.", "positive": "domini", "negative": "dominorum"},
-            {"prompt": "Bellum, i + Génitif → Finis ___ est.", "positive": "belli", "negative": "bellorum"},
-            {"prompt": "Templum, i + Génitif → Porta ___ est.", "positive": "templi", "negative": "templorum"}
-          ],
-          [
-            {"prompt": "Rosa, ae + Datif → Aqua ___ datur.", "positive": "rosae", "negative": "rosis"},
-            {"prompt": "Puella, ae + Datif → Donum ___ datur.", "positive": "puellae", "negative": "puellis"},
-            {"prompt": "Servus, i + Datif → Cibus ___ datur.", "positive": "servo", "negative": "servis"},
-            {"prompt": "Dominus, i + Datif → Servus ___ paret.", "positive": "domino", "negative": "dominis"},
-            {"prompt": "Bellum, i + Datif → Gloria ___ datur.", "positive": "bello", "negative": "bellis"},
-            {"prompt": "Templum, i + Datif → Sacerdos ___ servit.", "positive": "templo", "negative": "templis"}
-          ],
-          [
-            {"prompt": "Rosa, ae + Ablatif → Cum ___ sedeo.", "positive": "rosa", "negative": "rosis"},
-            {"prompt": "Puella, ae + Ablatif → Cum ___ ambulo.", "positive": "puella", "negative": "puellis"},
-            {"prompt": "Servus, i + Ablatif → Cum ___ laboro.", "positive": "servo", "negative": "servis"},
-            {"prompt": "Dominus, i + Ablatif → Cum ___ venio.", "positive": "domino", "negative": "dominis"},
-            {"prompt": "Bellum, i + Ablatif → In ___ pugno.", "positive": "bello", "negative": "bellis"},
-            {"prompt": "Templum, i + Ablatif → In ___ oro.", "positive": "templo", "negative": "templis"}
-          ]
-        ]
-      };
-
-      console.clear();
-      console.log("%c=== COPIE LE JSON CI-DESSOUS ===", "color: #00d4ff; font-weight: bold; font-size: 14px;");
-      console.log(JSON.stringify(gameData, null, 2));
-      console.log("%c===============================", "color: #00d4ff; font-weight: bold;");
-    </script>
   </body>
 </html>
