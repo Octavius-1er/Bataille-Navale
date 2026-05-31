@@ -7,7 +7,7 @@ import { useToast } from './Toast'
 
 const PUBLISHER_ID = 'ca-pub-4381520676476126'
 const AD_SLOTS = {
-  banner:   '0000000001',  // ← remplace quand tu crées l'unité dans AdSense
+  banner:   '1227849584',  // ← remplace quand tu crées l'unité dans AdSense
   rewarded: '0000000003',  // ← remplace quand tu crées l'unité rewarded
 }
 const REWARDED_COINS = 30
