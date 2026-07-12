@@ -125,6 +125,74 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* ── Contenu éditorial (règles, historique, FAQ) ─────
+          Section publique, visible sans compte, pour donner
+          un vrai contenu indexable par les moteurs de recherche
+          et conforme aux règles AdSense (pas de pub sur page
+          purement "porte d'entrée"). ────────────────────── */}
+      <section style={{ maxWidth:900, margin:'0 auto', padding:'20px 24px 80px' }}>
+
+        <h2 style={{ fontFamily:'Bebas Neue,sans-serif', fontSize:32, letterSpacing:3, color:'#00d4ff', textAlign:'center', marginBottom:32 }}>
+          RÈGLES DU JEU
+        </h2>
+        <div className="card" style={{ padding:'28px 24px', marginBottom:40, lineHeight:1.8, color:'#b8c8d8', fontSize:14 }}>
+          <p style={{ marginBottom:14 }}>
+            Naval Command reprend le principe classique de la bataille navale, ce jeu de
+            déduction à deux joueurs inventé au début du XXe siècle et popularisé sous forme
+            de jeu de société papier avant de devenir un classique du jeu vidéo.
+          </p>
+          <p style={{ marginBottom:14 }}>
+            Chaque joueur dispose sa flotte de navires sur une grille cachée à l'adversaire.
+            À tour de rôle, les joueurs annoncent les coordonnées d'une case pour tenter de
+            toucher un navire ennemi. Une case touchée est marquée, une case ratée aussi —
+            au fil des tours, chacun affine sa stratégie en déduisant la position probable
+            des navires restants à partir des tirs précédents.
+          </p>
+          <p style={{ marginBottom:14 }}>
+            Le premier joueur à couler l'intégralité de la flotte adverse remporte la partie.
+            Naval Command propose trois façons d'y jouer :
+          </p>
+          <ul style={{ paddingLeft:20, marginBottom:0 }}>
+            <li style={{ marginBottom:8 }}><strong style={{color:'#00d4ff'}}>En ligne :</strong> affrontez un autre joueur à distance via un code de salle, avec synchronisation en temps réel.</li>
+            <li style={{ marginBottom:8 }}><strong style={{color:'#00d4ff'}}>En local :</strong> jouez à deux sur le même écran, chacun son tour, avec l'écran masqué entre les tours pour préserver le secret des positions.</li>
+            <li><strong style={{color:'#00d4ff'}}>Contre l'IA :</strong> entraînez-vous seul face à un adversaire artificiel proposant trois niveaux de difficulté, du tir aléatoire à la destruction quasi optimale.</li>
+          </ul>
+        </div>
+
+        <h2 style={{ fontFamily:'Bebas Neue,sans-serif', fontSize:32, letterSpacing:3, color:'#00d4ff', textAlign:'center', marginBottom:32 }}>
+          QUESTIONS FRÉQUENTES
+        </h2>
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          {[
+            {
+              q: "Faut-il créer un compte pour jouer ?",
+              a: "Non. Le mode invité permet de jouer immédiatement sans inscription, mais sans sauvegarde des statistiques ni des flottes. Créer un compte gratuit permet de conserver sa progression, ses parties et son casier de personnalisation.",
+            },
+            {
+              q: "Combien de joueurs peuvent participer ?",
+              a: "Naval Command se joue à deux, que ce soit en ligne à distance ou en local sur le même appareil. Le mode contre l'IA permet de jouer seul.",
+            },
+            {
+              q: "Le jeu est-il gratuit ?",
+              a: "Oui, Naval Command est entièrement gratuit et accessible depuis un navigateur, sans téléchargement.",
+            },
+            {
+              q: "Sur quels appareils puis-je jouer ?",
+              a: "Le jeu fonctionne sur ordinateur, tablette et smartphone directement dans le navigateur, sans installation.",
+            },
+          ].map(item => (
+            <div key={item.q} className="card hover-glow" style={{ padding:'18px 22px' }}>
+              <div style={{ fontFamily:'Barlow,sans-serif', fontWeight:600, fontSize:15, color:'#e0eaf2', marginBottom:8 }}>
+                {item.q}
+              </div>
+              <div style={{ fontSize:13, color:'#4a7090', lineHeight:1.7 }}>
+                {item.a}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* ── LOGIN / REGISTER modal ────────────────────────── */}
       {(modal === 'login' || modal === 'register') && (
         <Modal title={modal === 'register' ? 'CRÉER UN COMPTE' : 'CONNEXION'} onClose={() => setModal(null)}>
